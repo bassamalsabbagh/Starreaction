@@ -15,7 +15,7 @@ presented as more validated than it is.
    `docs/DATA_SOURCES.md` (source register).
 2. Inspect the existing types in `src/types/`, data in `src/data/`, any code in
    `src/features/site-ranking/`, and its tests in `tests/unit/features/site-ranking/`. Today's
-   checks and Sites order live in `src/data/demoData.ts` (`assessSky`, `rankDemoSites`) and
+   checks and Sites order live in `src/data/demoData.ts` (`assessSky`, `rankSites`) and
    `src/utils/skyVisibility.ts`; read them, but they are not yours to edit.
 3. Base proposals on what is actually there. If a needed constraint or value isn't sourced, list it
    as a gap and ask the main session to request it from `lunar-data-researcher`.

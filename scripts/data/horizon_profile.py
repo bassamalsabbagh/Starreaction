@@ -5,10 +5,12 @@ uncompressed float32 south-polar-stereographic GeoTIFF (as QGIS exports LDEM_80S
 numpy alone, and writes src/data/terrainHorizons.ts. Rule: docs/LANDER_RULES.md, "Terrain horizon".
 
     python scripts/data/horizon_profile.py "<path to .tif>" --source "<text>" \
-        --site demo-site-india -85.5 31
+        --site im1 -80.13 1.44 --site im2 -84.79 29.2
 
 For each whole azimuth (clockwise from north) it finds the highest angle of the terrain seen from
-the site's ground, out to MAX_DISTANCE_M or the map's edge, in true 3D on the 1737.4 km sphere.
+the site's ground, out to MAX_DISTANCE_M or the map's edge, in true 3D on the 1737.4 km sphere. A
+direction whose ray leaves the map (or meets no-data) before MAX_DISTANCE_M is marked in `edgeCut`,
+and the app labels it "cut off at data edge" (im1 sits on the map's 80 S edge).
 """
 import argparse
 import math
@@ -109,14 +111,15 @@ def destination(lat, lon, azimuth_deg, distance_m):
 
 
 def horizon(dem, lat, lon):
-    """Per whole azimuth: the terrain's highest angle (deg) and how far terrain is known (m)."""
+    """Per whole azimuth: the terrain's highest angle (deg), whether the ray was cut off at the
+    data's edge before MAX_DISTANCE_M (1) or not (0), and how far terrain is known everywhere (m)."""
     h0 = float(dem.sample(*dem.pixel(lat, lon)))
     if math.isnan(h0):
         sys.exit(f'The site {lat}, {lon} is outside the elevation map.')
     distances = np.arange(dem.pixel_size / 2, MAX_DISTANCE_M + dem.pixel_size, dem.pixel_size / 2)
     up = unit(lat, lon)
     at = (R + h0) * up
-    elevations, known = [], []
+    elevations, known, cut = [], [], []
     for azimuth in range(360):
         la, lo = destination(lat, lon, azimuth, distances)
         h = dem.sample(*dem.pixel(la, lo))
@@ -127,7 +130,8 @@ def horizon(dem, lat, lon):
         angles = np.degrees(np.arcsin((v @ up) / np.linalg.norm(v, axis=1)))
         elevations.append(float(angles.max()))
         known.append(float(distances[valid].max()))
-    return h0, elevations, min(known)
+        cut.append(0 if valid[-1] else 1)
+    return h0, elevations, cut, min(known)
 
 
 def main():
@@ -140,13 +144,16 @@ def main():
     dem = Dem(args.tif)
     entries = []
     for site_id, lat, lon in args.site:
-        h0, elevations, radius = horizon(dem, float(lat), float(lon))
+        h0, elevations, cut, radius = horizon(dem, float(lat), float(lon))
         print(f'{site_id}: ground {h0:.0f} m, horizon {min(elevations):.2f} to '
-              f'{max(elevations):.2f} deg, known to {radius / 1000:.0f} km')
+              f'{max(elevations):.2f} deg, known to {radius / 1000:.0f} km, '
+              f'{sum(cut)} of 360 directions cut off at the data edge')
         values = ', '.join(f'{e:.2f}' for e in elevations)
+        cut_values = ', '.join(str(c) for c in cut)
         entries.append(
             f"  '{site_id}': {{\n"
             f'    elevations: Float32Array.from([{values}]),\n'
+            f'    edgeCut: Uint8Array.from([{cut_values}]),\n'
             f'    radiusM: {round(radius)},\n'
             f'    spacingM: {dem.pixel_size:g},\n'
             f'    source: {args.source!r},\n'

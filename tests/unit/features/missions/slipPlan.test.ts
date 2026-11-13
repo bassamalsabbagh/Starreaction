@@ -5,7 +5,6 @@ import {
   type DemoMission,
 } from '../../../../src/data/demoData';
 import {
-  addMonthsUtc,
   appearsIn,
   findMissionByName,
   numbersInText,
@@ -22,6 +21,7 @@ function reading(overrides: Partial<SlipReading> = {}): SlipReading {
     missionName: null,
     shift: null,
     date: null,
+    range: null,
     powerDays: null,
     minSunDeg: null,
     minEarthDeg: null,
@@ -81,16 +81,6 @@ describe('appearsIn and findMissionByName', () => {
     expect(findMissionByName(DEMO_MISSIONS, 'Demo Mission C')?.id).toBe('demo-mission-c');
     expect(findMissionByName(DEMO_MISSIONS, 'B')).toBeUndefined();
     expect(findMissionByName(DEMO_MISSIONS, 'IM-3')).toBeUndefined();
-  });
-});
-
-describe('addMonthsUtc', () => {
-  it('keeps the day, or moves it to the last day of a shorter month', () => {
-    expect(addMonthsUtc(Date.UTC(2027, 0, 31, 6), 1)).toBe(Date.UTC(2027, 1, 28, 6));
-    expect(addMonthsUtc(Date.UTC(2028, 0, 31), 1)).toBe(Date.UTC(2028, 1, 29));
-    expect(addMonthsUtc(Date.UTC(2026, 10, 15, 2), 2)).toBe(Date.UTC(2027, 0, 15, 2));
-    expect(addMonthsUtc(Date.UTC(2027, 2, 31), -1)).toBe(Date.UTC(2027, 1, 28));
-    expect(addMonthsUtc(Date.UTC(2026, 10, 15), 12)).toBe(Date.UTC(2027, 10, 15));
   });
 });
 
@@ -326,5 +316,84 @@ describe('planSlip: unclear and empty', () => {
     const result = plan('hello there', {});
     expect(result.empty).toBe(true);
     expect(result.canApply).toBe(false);
+  });
+});
+
+describe('planSlip: a range of dates (docs/LANDER_RULES.md, "Date range and hours")', () => {
+  const dec = (day: number | null, year: number | null = null) =>
+    ({ day, month: 'December', year }) as const;
+
+  it('reads "between 12 Dec and 25 Dec" as those dates, the next December, and can apply it', () => {
+    const result = plan('Plan for between 12 Dec and 25 Dec', {
+      range: { from: dec(12), to: dec(25) },
+    });
+    expect(result.range?.range).toEqual({
+      startMs: Date.UTC(2026, 11, 12),
+      stopMs: Date.UTC(2026, 11, 25),
+    });
+    expect(result.range?.how).toBe('no year in your text, so the next December was used');
+    expect(result.errors).toEqual([]);
+    expect(result.canApply).toBe(true);
+    expect(result.readAny).toBe(true);
+  });
+
+  it('runs a missing day from the 1st to the month’s last day, and over a new year', () => {
+    const result = plan('Check December to February', {
+      range: {
+        from: { day: null, month: 'December', year: null },
+        to: { day: null, month: 'February', year: null },
+      },
+    });
+    expect(result.range?.range).toEqual({
+      startMs: Date.UTC(2026, 11, 1),
+      stopMs: Date.UTC(2027, 1, 28),
+    });
+  });
+
+  it('uses only the numbers and months in the text', () => {
+    const dayDropped = plan('between December and 25 Dec 2027', {
+      range: { from: dec(12, 2027), to: dec(25, 2027) },
+    });
+    expect(dayDropped.range?.range.startMs).toBe(Date.UTC(2027, 11, 1));
+    expect(dayDropped.dropped).toEqual([
+      "The range's first day isn't in your text, so the 1st of the month was used.",
+    ]);
+    // (12 would count as December, the month's number.)
+    const noMonth = plan('between the 13th and the 25th', {
+      range: { from: dec(13), to: dec(25) },
+    });
+    expect(noMonth.range).toBeNull();
+    expect(noMonth.dropped).toEqual([
+      "The range's first month isn't in your text, so the range was not used.",
+    ]);
+    expect(noMonth.canApply).toBe(false);
+  });
+
+  it('refuses a last date before the first, more than 12 months, and dates outside 1990–2100', () => {
+    const backwards = plan('between 25 Dec 2027 and 12 Dec 2027', {
+      range: { from: dec(25, 2027), to: dec(12, 2027) },
+    });
+    expect(backwards.errors).toEqual(['The stop date is before the start date.']);
+    expect(backwards.canApply).toBe(false);
+    const long = plan('from 1 December 2026 to 25 December 2027', {
+      range: { from: dec(1, 2026), to: dec(25, 2027) },
+    });
+    expect(long.errors).toEqual(['Pick at most 12 months.']);
+    const far = plan('between 1 Dec 2150 and 5 Dec 2150', {
+      range: { from: dec(1, 2150), to: dec(5, 2150) },
+    });
+    expect(far.errors).toEqual(['Choose dates from 1 Jan 1990 to 31 Dec 2100.']);
+  });
+
+  it('refuses a range together with a new date or a shift', () => {
+    const both = plan('slipped 3 weeks, check between 12 Dec and 25 Dec', {
+      shift: { shift: 3, unit: 'weeks' },
+      range: { from: dec(12), to: dec(25) },
+    });
+    expect(both.range).toBeNull();
+    expect(both.time).toBeNull();
+    expect(both.errors).toEqual([
+      'Your text gives both a range of dates and a new date or shift. Pick one, or set them by hand.',
+    ]);
   });
 });

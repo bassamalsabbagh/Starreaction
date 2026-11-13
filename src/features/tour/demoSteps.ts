@@ -28,8 +28,8 @@ export function stepDurationMs(step: Pick<TourStep, 'title' | 'text'>): number {
 }
 
 /**
- * "Watch demo": nine short captions that drive the app through the planner's question. Every site
- * and mission in it is DEMO; only the Sun and Earth are real.
+ * "Watch demo": nine short captions that drive the app through the planner's question. The sites
+ * are real landings and the Sun and Earth are real; Demo Mission A's needs are made up (DEMO).
  */
 export const DEMO_STEPS: readonly DemoStep[] = [
   {
@@ -79,7 +79,7 @@ export const DEMO_STEPS: readonly DemoStep[] = [
     title: 'The south pole',
     target: 'horizon',
     panel: 'site',
-    text: 'Near the south pole the Sun skims the horizon and the Earth comes and goes, so small changes in place or date matter.',
+    text: 'IM-2 Athena landed near the south pole. There the Sun skims the horizon and the Earth comes and goes, so small changes in place or date matter.',
   },
   {
     action: 'anywhere',

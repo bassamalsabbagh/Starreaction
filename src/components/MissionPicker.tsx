@@ -62,14 +62,18 @@ export function MissionPicker({
       <p className={styles.customNote}>
         {mission.custom ? (
           <>
-            <span className={styles.customTag}>Custom</span> Your values; the sites are DEMO.
+            <span className={styles.customTag}>Custom</span> Your values. The sites are real
+            landings, checked with the real Sun and Earth.
           </>
         ) : (
-          <>A made-up DEMO profile. Each site is checked against it with the real Sun and Earth.</>
+          <>
+            <span className={styles.demoTag}>DEMO</span> These needs are made up for practice. The
+            sites are real landings, checked against them with the real Sun and Earth.
+          </>
         )}
       </p>
       <Tooltip
-        content="Make a mission from your own needs; sites stay DEMO."
+        content="Make a mission from your own needs; the sites are real landings."
         placement="above"
         align="start"
       >

@@ -1,5 +1,9 @@
 # South-pole elevation data: loading the first real file
 
+> **Superseded for the map layers (2026-11-13):** the elevation and slope layers and their readout
+> now come from the team's rasters through `scripts/data/make_map_layers.py`; see
+> `docs/MAP_LAYERS.md`. This page describes the earlier single-grid path, kept for reference.
+
 The app can already show **elevation and slope** for any point near the south pole, and the
 **Elevation** and **Slope** map layers. Until a file is loaded it says "No elevation data loaded
 yet". This page is how to load one. Method and rules: `docs/LANDER_RULES.md`, "Elevation and slope

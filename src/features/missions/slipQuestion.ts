@@ -6,20 +6,21 @@
  */
 import {
   assessSky,
-  bestDemoSite,
-  rankDemoSites,
+  bestSite,
+  rankSites,
   type DemoMission,
-  type DemoSite,
   type SkyAssessment,
 } from '../../data/demoData';
 import { terrainProfileFor } from '../../data/terrainPatches';
+import { siteHourlySky, type HorizonsSeries } from '../../services/horizonsData';
+import type { Site } from '../../services/sites';
 import {
   SLIP_MONTHS,
   type SlipQuestion,
   type SlipQuestionAbout,
   type SlipQuestionMonth,
 } from '../../services/slipReading';
-import { hourlySky, sampledSpan, siteSky, type SiteSky } from '../../utils/skyVisibility';
+import { sampledSpan, siteSky, type SiteSky } from '../../utils/skyVisibility';
 import {
   RANGE_MS,
   TIME_MAX_MS,
@@ -38,11 +39,15 @@ export interface SlipAnswerContext {
   readonly text: string;
   /** The mission to answer for (the one named in the text, or the selected one). */
   readonly mission: DemoMission;
-  readonly sites: readonly DemoSite[];
+  readonly sites: readonly Site[];
   /** The time bar's time: a month without a year is the next one from here. */
   readonly time: number;
-  /** The time bar's range: a question without months (except "when") answers for it. */
+  /** The range being checked: a question without months (except "when") answers for it. */
   readonly range: TimeRange;
+  /** How the answer names that range (default "the time bar’s range"). */
+  readonly rangeName?: string;
+  /** The fixed sites' JPL Horizons positions by site id (the engine where they have no data). */
+  readonly series?: ReadonlyMap<string, HorizonsSeries>;
   /** The real clock (UTC ms): months that have ended are "in the past". */
   readonly now: number;
 }
@@ -60,12 +65,12 @@ export interface SlipAnswer {
    * The site answered for: the one named in the text, the best one ("when"/"where", null when none
    * passes), or the one with the most Earth time ("earth").
    */
-  readonly site: DemoSite | null;
+  readonly site: Site | null;
   readonly siteNamed: boolean;
   /** That site's Sun and Earth over the span. */
   readonly sky: SiteSky | null;
   readonly assessment: SkyAssessment | null;
-  /** How many demo sites pass all the checks over the span (when no site was named). */
+  /** How many sites pass all the checks over the span (when no site was named). */
   readonly suitableCount: number;
   readonly siteCount: number;
   /** Parts of the question that were not used, and why (never the AI's values). */
@@ -74,18 +79,30 @@ export interface SlipAnswer {
   readonly errors: readonly string[];
 }
 
-/** "Site Alpha", "demo site alpha" and "Demo Site Alpha" are the same site. */
+/**
+ * Other names a site goes by in a question, besides its full name and its id (matched the same
+ * way: ignoring case, spaces and hyphens).
+ */
+export const SITE_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  im1: ['IM-1', 'Odysseus'],
+  im2: ['IM-2', 'Athena'],
+  bg1: ['Blue Ghost'],
+  ch3: ['Chandrayaan-3', 'Chandrayaan', 'Vikram'],
+};
+
+/** "IM-2 Athena", "im 2 athena" and "IM2-Athena" are the same site. */
 function siteKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^demo /, '');
+  // Hyphens include the typographic ones (U+2010–2015) a pasted name may carry.
+  return name.toLowerCase().replace(/[\s\-\u2010-\u2015]+/g, '');
 }
 
-export function findSiteByName(sites: readonly DemoSite[], name: string): DemoSite | undefined {
+/** The site a name means: its full name, its id or one of its aliases. */
+export function findSiteByName(sites: readonly Site[], name: string): Site | undefined {
   const wanted = siteKey(name);
-  return sites.find((site) => siteKey(site.name) === wanted);
+  if (wanted === '') return undefined;
+  return sites.find((site) =>
+    [site.name, site.id, ...(SITE_ALIASES[site.id] ?? [])].some((key) => siteKey(key) === wanted),
+  );
 }
 
 /** The first day of a month, as a count of months since year 0 (for comparing and adding). */
@@ -136,7 +153,9 @@ function readSpan(
 
   if (!from) {
     // Only "when" looks ahead; every other question is about the time bar's range, like the list.
-    if (question.about !== 'when') return { span: range, how: 'the time bar’s range' };
+    if (question.about !== 'when') {
+      return { span: range, how: context.rangeName ?? 'the time bar’s range' };
+    }
     return {
       span: { start: range.start, end: range.start + QUESTION_RANGES_AHEAD * RANGE_MS },
       how: `the next ${QUESTION_RANGES_AHEAD} months from the time bar`,
@@ -175,7 +194,7 @@ function readSpan(
   return { span, how };
 }
 
-/** Questions about one site: without a named demo site they can't be answered. */
+/** Questions about one site: without a named site they can't be answered. */
 const NEEDS_A_SITE: readonly SlipQuestionAbout[] = ['sunlight', 'passes'];
 
 /** Whether the months asked about have ended, by the real clock. */
@@ -198,7 +217,7 @@ export function answerQuestion(question: SlipQuestion, context: SlipAnswerContex
   // can't be answered; the Earth-time question compares every site anyway.
   const notUsed = needsSite ? '' : ', so every site was checked';
 
-  let named: DemoSite | null = null;
+  let named: Site | null = null;
   if (question.siteName !== null) {
     if (about === 'earth') {
       dropped.push('A site name is not used for this question: it compares every site.');
@@ -207,12 +226,12 @@ export function answerQuestion(question: SlipQuestion, context: SlipAnswerContex
     } else {
       const found = findSiteByName(sites, question.siteName);
       if (found) named = found;
-      else dropped.push(`“${question.siteName.trim()}” isn't a demo site${notUsed}.`);
+      else dropped.push(`“${question.siteName.trim()}” isn't one of our sites${notUsed}.`);
     }
   }
   if (needsSite && !named) {
-    const example = sites[0]?.name ?? 'a demo site';
-    errors.push(`Name one of the demo sites in your question, like “${example}”.`);
+    const example = sites[0]?.name ?? 'a landing site';
+    errors.push(`Name one of the sites in your question, like “${example}”.`);
   }
 
   const read = errors.length === 0 ? readSpan(question, context, dropped, errors) : null;
@@ -239,9 +258,14 @@ export function answerQuestion(question: SlipQuestion, context: SlipAnswerContex
   }
 
   const { span, how } = read;
-  const samples = hourlySky(sampledSpan(span));
-  const skyOf = (site: DemoSite) =>
-    siteSky(samples, site, mission, span, terrainProfileFor(site.id));
+  const skyOf = (site: Site) =>
+    siteSky(
+      siteHourlySky(context.series?.get(site.id) ?? null, site, sampledSpan(span)).samples,
+      site,
+      mission,
+      span,
+      terrainProfileFor(site.id),
+    );
   const answered = {
     ...empty,
     span,
@@ -263,7 +287,7 @@ export function answerQuestion(question: SlipQuestion, context: SlipAnswerContex
   }
 
   const skies = new Map(sites.map((site) => [site.id, skyOf(site)]));
-  const ranked = rankDemoSites(sites, mission, skies, span);
+  const ranked = rankSites(sites, mission, skies, span);
   const suitableCount = ranked.filter((entry) => entry.rank !== null).length;
   if (about === 'earth') {
     // The most Earth time over the months, ties by name; suitable or not, it is a fact.
@@ -281,7 +305,7 @@ export function answerQuestion(question: SlipQuestion, context: SlipAnswerContex
       suitableCount,
     };
   }
-  const best = bestDemoSite(ranked);
+  const best = bestSite(ranked);
   return {
     ...answered,
     site: best?.site ?? null,

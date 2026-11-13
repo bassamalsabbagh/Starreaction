@@ -1,0 +1,131 @@
+[
+  {
+    "id": "nova-c",
+    "name": "Nova-C (IM-1, IM-2)",
+    "solarPowerW": {
+      "value": 788,
+      "tag": "S",
+      "source": "https://apps.fcc.gov/els/GetAtt.html?id=265886",
+      "note": "788 W maximum from three body panels, per the company FCC filing (opened source). A secondary web page says 200 W [S*]; the two conflict, and we follow the rule that the opened source wins (same rule as the battery: 1,554 Wh over 700 Wh). The solar figure does not feed any verdict."
+    },
+    "batteryWh": {
+      "value": 1554,
+      "tag": "S",
+      "source": "https://apps.fcc.gov/els/GetAtt.html?id=265886",
+      "note": "Intuitive Machines IM-1 Orbital Debris Assessment Report (FCC filing), page 9 of 52: three 72-cell Li-ion modules, 28 VDC nominal, total energy capacity per spacecraft 1554 W-h. A second FCC document (fcc.report SAT-LOA-20210423-00055) gives the same number. A secondary web page says 700 Wh; the two conflict. This is a pre-launch document, so the flown design may differ. Applies to the Nova-C design flown as IM-1 and IM-2; IM-2 may differ slightly."
+    },
+    "heaterW": {
+      "value": 100,
+      "tag": "A",
+      "source": null,
+      "note": "Team assumption for the whole night load (heater plus electronics), not the heater alone. Basis: Intuitive Machines said IM-1 had roughly 10 to 20 hours of battery left after sunset (Reuters, Feb 2024). With 1554 Wh that implies about 78 to 155 W; we take 100 W, about the middle of the hours range (15 h gives about 104 W). Not a published figure."
+    },
+    "panelAreaM2": {
+      "value": null,
+      "tag": "not published",
+      "source": null
+    },
+    "touchdownSlopeDeg": {
+      "value": null,
+      "tag": "not published",
+      "source": null,
+      "note": "secondary pages disagree"
+    }
+  },
+  {
+    "id": "blue-ghost-1",
+    "name": "Blue Ghost 1 (Firefly)",
+    "solarPowerW": {
+      "value": 400,
+      "tag": "S",
+      "source": "https://fireflyspace.com/missions/blue-ghost-mission-1/",
+      "note": "up to 400 W; other pages say 400 to 650 W"
+    },
+    "batteryWh": {
+      "value": null,
+      "tag": "not published",
+      "source": "https://fireflyspace.com/news/blue-ghost-mission-1-live-updates/",
+      "note": "four batteries, size not published"
+    },
+    "heaterW": {
+      "value": null,
+      "tag": "not published",
+      "source": null
+    },
+    "panelAreaM2": {
+      "value": null,
+      "tag": "not published",
+      "source": null
+    },
+    "touchdownSlopeDeg": {
+      "value": null,
+      "tag": "not published",
+      "source": null,
+      "note": "low centre of mass, wide footprint; no angle given"
+    }
+  },
+  {
+    "id": "griffin-1",
+    "name": "Griffin-1 (Astrobotic, upcoming: not landed yet; launch reported late 2026 to early 2027)",
+    "solarPowerW": {
+      "value": null,
+      "tag": "not published",
+      "source": "https://science.nasa.gov/wp-content/uploads/2023/11/astrobotic-lunar-landers-pug.pdf",
+      "note": "can carry larger arrays; no figure"
+    },
+    "batteryWh": {
+      "value": null,
+      "tag": "not published",
+      "source": "https://science.nasa.gov/wp-content/uploads/2023/11/astrobotic-lunar-landers-pug.pdf",
+      "note": "space-grade Li-ion; no capacity"
+    },
+    "heaterW": {
+      "value": null,
+      "tag": "not published",
+      "source": null
+    },
+    "panelAreaM2": {
+      "value": null,
+      "tag": "not published",
+      "source": null
+    },
+    "touchdownSlopeDeg": {
+      "value": null,
+      "tag": "not published",
+      "source": "https://science.nasa.gov/wp-content/uploads/2023/11/astrobotic-lunar-landers-pug.pdf",
+      "note": "sites chosen with effective slope up to 10 deg; that is a site rule, not a lander limit"
+    }
+  },
+  {
+    "id": "chandrayaan-3",
+    "name": "Chandrayaan-3 (Vikram lander + Pragyan rover)",
+    "solarPowerW": {
+      "value": 738,
+      "tag": "S",
+      "source": "https://www.isro.gov.in/Chandrayaan3_Details.html",
+      "note": "lander module, winter solstice; rover 50 W"
+    },
+    "batteryWh": {
+      "value": null,
+      "tag": "not published",
+      "source": null,
+      "note": "ISRO said the battery was fully charged before sleep; no capacity"
+    },
+    "heaterW": {
+      "value": null,
+      "tag": "not published",
+      "source": null
+    },
+    "panelAreaM2": {
+      "value": null,
+      "tag": "not published",
+      "source": null
+    },
+    "touchdownSlopeDeg": {
+      "value": 12,
+      "tag": "S",
+      "source": "https://www.isro.gov.in/Chandrayaan3_Details.html",
+      "note": "touchdown spec: slope up to 12 deg, vertical up to 2 m/s, horizontal up to 0.5 m/s"
+    }
+  }
+]

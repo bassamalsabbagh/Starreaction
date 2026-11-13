@@ -1,6 +1,7 @@
 import {
   formatDayMonth,
   formatDuration,
+  rangeWords,
   windowStatus,
   type TimeRange,
   type TimeWindowMs,
@@ -24,7 +25,7 @@ export function WindowBar({ windows, time, range }: WindowBarProps) {
   if (status.kind === 'none') {
     return (
       <p className={styles.none} data-testid="window-bar">
-        No landing window left in this month.
+        No landing window left {rangeWords(range).within}.
       </p>
     );
   }

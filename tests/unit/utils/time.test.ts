@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addMonthsUtc,
   dayTicks,
   DAY_MS,
   HOUR_MS,
@@ -11,8 +12,10 @@ import {
   floorToMinute,
   formatAmman,
   formatClock,
+  formatCountdown,
   formatDuration,
   formatRangeUtc,
+  rangeWords,
   parseUtcInput,
   dayCentre,
   rangeAround,
@@ -51,6 +54,25 @@ describe('formatting', () => {
     expect(formatDuration(30_000)).toBe('under 1m');
   });
 
+  it('calls the time bar’s 29.5 days "this month", and picked dates never so', () => {
+    expect(rangeWords(rangeAround(dayCentre(T))).now).toBe('this month');
+    expect(rangeWords(rangeAround(dayCentre(T))).of).toBe('of the month');
+    const picked = rangeWords({ start: Date.UTC(2026, 11, 12), end: Date.UTC(2027, 0, 11) });
+    expect(picked).toEqual({
+      now: 'in these dates',
+      within: 'in these dates',
+      of: 'of these dates',
+      title: 'These dates',
+    });
+  });
+
+  it('spaces the units of a forecast countdown: "2 d 4 h"', () => {
+    expect(formatCountdown(2 * DAY_MS + 4 * HOUR_MS + 59_000)).toBe('2 d 4 h');
+    expect(formatCountdown(5 * HOUR_MS + 12 * 60_000)).toBe('5 h 12 m');
+    expect(formatCountdown(12 * 60_000)).toBe('12 m');
+    expect(formatCountdown(30_000)).toBe('under 1 m');
+  });
+
   it('round-trips through the date and time inputs', () => {
     const values = toInputValues(T);
     expect(values).toEqual({ date: '2026-10-26', time: '14:05' });
@@ -74,19 +96,22 @@ describe('window lengths: one number for one thing (2026-11-13 fix)', () => {
     // Delta's window, 16 Nov 23:00 to 29 Nov 20:00 (12 d 21 h), with the month ending 27 Nov 00:00
     // (10 d 1 h inside): both numbers rounded down, side by side.
     const delta = { start: Date.UTC(2026, 10, 16, 23), end: Date.UTC(2026, 10, 29, 20) };
-    const month = { start: Date.UTC(2026, 9, 31, 18), end: Date.UTC(2026, 10, 27, 0) };
+    const month = { start: Date.UTC(2026, 10, 27, 0) - RANGE_MS, end: Date.UTC(2026, 10, 27, 0) };
     expect(insideRangeMs(delta, month)).toBe(month.end - delta.start);
     expect(formatWindowLength(delta, month)).toBe('12.8 days (10 days in this month)');
   });
 
   it('adds the part inside the month even when the window runs only an hour past it', () => {
     // QA case: 14 days of which 13.9 (rounded down) fall inside; one number alone would disagree.
-    const month = { start: Date.UTC(2026, 10, 28), end: Date.UTC(2026, 11, 27, 6) };
+    const month = { start: Date.UTC(2026, 11, 27, 6) - RANGE_MS, end: Date.UTC(2026, 11, 27, 6) };
     const window = { start: Date.UTC(2026, 11, 13, 7), end: Date.UTC(2026, 11, 27, 7) };
     expect(formatWindowLength(window, month)).toBe('14 days (13.9 days in this month)');
     // When both round to the same tenth there is nothing to add.
     const close = { start: Date.UTC(2026, 11, 13, 7), end: Date.UTC(2026, 11, 27, 6, 30) };
     expect(formatWindowLength(close, month)).toBe('13.9 days');
+    // Picked dates are never called "this month".
+    const picked = { start: month.start, end: month.start + 20 * DAY_MS };
+    expect(formatWindowLength(window, picked)).toMatch(/^14 days \([\d.]+ days in these dates\)$/);
   });
 
   it('shows only the whole length when the window lies inside the month', () => {
@@ -211,5 +236,15 @@ describe('dayTicks', () => {
     const first = dayTicks(range)[0];
     expect(first?.ms).toBe(Date.parse('2026-11-29T00:00:00Z'));
     expect(first?.index).toBe(0);
+  });
+});
+
+describe('addMonthsUtc', () => {
+  it('keeps the day, or moves it to the last day of a shorter month', () => {
+    expect(addMonthsUtc(Date.UTC(2027, 0, 31, 6), 1)).toBe(Date.UTC(2027, 1, 28, 6));
+    expect(addMonthsUtc(Date.UTC(2028, 0, 31), 1)).toBe(Date.UTC(2028, 1, 29));
+    expect(addMonthsUtc(Date.UTC(2026, 10, 15, 2), 2)).toBe(Date.UTC(2027, 0, 15, 2));
+    expect(addMonthsUtc(Date.UTC(2027, 2, 31), -1)).toBe(Date.UTC(2027, 1, 28));
+    expect(addMonthsUtc(Date.UTC(2026, 10, 15), 12)).toBe(Date.UTC(2027, 10, 15));
   });
 });

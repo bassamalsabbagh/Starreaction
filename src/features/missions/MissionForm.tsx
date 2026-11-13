@@ -176,8 +176,8 @@ export function MissionForm({
         </p>
       ) : null}
       <p className={styles.note}>
-        Your values are yours; the sites stay <span className={styles.demo}>DEMO</span>. The sliders
-        cover DEMO ranges.
+        Your values are yours; the sites are real landings. The sliders cover{' '}
+        <span className={styles.demo}>DEMO</span> ranges, made up for practice.
       </p>
 
       <div className={styles.field}>

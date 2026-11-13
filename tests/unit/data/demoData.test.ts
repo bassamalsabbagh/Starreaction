@@ -2,17 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_DEMO_MISSION,
   DEMO_MISSIONS,
-  DEMO_SITES,
   assessSky,
-  bestDemoSite,
+  bestSite,
   findDemoMission,
   formatDays,
   formatShare,
-  rankDemoSites,
+  rankSites,
   verdictText,
   type DemoMission,
 } from '../../../src/data/demoData';
-import { isValidCoordinate } from '../../../src/utils/selenographic';
+import { SITES } from '../../../src/services/sites';
 import { hourlySky, sampledSpan, siteSky, type SiteSky } from '../../../src/utils/skyVisibility';
 import { DAY_MS, dayCentre, rangeAround } from '../../../src/utils/time';
 
@@ -24,11 +23,14 @@ function mission(id: string): DemoMission {
   return found;
 }
 
-/** A made-up sky for the pure checks: 12 sunlit days, the Earth always up. */
+/** A made-up sky for the pure checks: 12 sunlit days, the Earth always up (708 hours). */
 function sky(overrides: Partial<SiteSky> = {}): SiteSky {
   return {
     sunPct: 47,
     earthPct: 100,
+    sunHours: 333,
+    earthHours: 708,
+    bothHours: 333,
     longestSunlitDays: 12,
     longestWindowDays: 12,
     windows: [{ start: RANGE.start + DAY_MS, end: RANGE.start + 13 * DAY_MS }],
@@ -37,15 +39,14 @@ function sky(overrides: Partial<SiteSky> = {}): SiteSky {
 }
 
 describe('demo fixtures', () => {
-  it('has three demo missions and nine demo sites, all with valid coordinates', () => {
+  it('has three demo missions, each named as demo (the sites are real: data/sites.json)', () => {
     expect(DEMO_MISSIONS.map((entry) => entry.id)).toEqual([
       'demo-mission-a',
       'demo-mission-b',
       'demo-mission-c',
     ]);
+    for (const entry of DEMO_MISSIONS) expect(entry.name).toMatch(/^Demo Mission /);
     expect(DEFAULT_DEMO_MISSION.id).toBe('demo-mission-a');
-    expect(DEMO_SITES).toHaveLength(9);
-    for (const site of DEMO_SITES) expect(isValidCoordinate(site)).toBe(true);
     expect(findDemoMission('nope')).toBeUndefined();
   });
 });
@@ -150,62 +151,65 @@ describe('assessSky', () => {
   });
 });
 
-describe('rankDemoSites', () => {
+describe('rankSites', () => {
+  // Made-up skies on three real sites: only the ranking rule is under test here.
   const skies = new Map([
-    ['demo-site-alpha', sky({ longestWindowDays: 10, earthPct: 100, sunPct: 45 })],
-    ['demo-site-bravo', sky({ longestWindowDays: 12, earthPct: 60, sunPct: 50 })],
-    ['demo-site-golf', sky({ earthPct: 0, longestWindowDays: 0 })],
+    ['im1', sky({ longestWindowDays: 10, sunHours: 319, earthHours: 708, bothHours: 319 })],
+    ['im2', sky({ longestWindowDays: 12, sunHours: 354, earthHours: 425, bothHours: 300 })],
+    ['bg1', sky({ earthPct: 0, earthHours: 0, bothHours: 0, longestWindowDays: 0 })],
   ]);
-  const sites = DEMO_SITES.filter((site) => skies.has(site.id));
-  const ids = (order: Parameters<typeof rankDemoSites>[4]) =>
-    rankDemoSites(sites, DEFAULT_DEMO_MISSION, skies, RANGE, order).map((entry) => [
+  const sites = SITES.filter((site) => skies.has(site.id));
+  const ids = (order: Parameters<typeof rankSites>[4]) =>
+    rankSites(sites, DEFAULT_DEMO_MISSION, skies, RANGE, order).map((entry) => [
       entry.site.id,
       entry.rank,
     ]);
 
   it('lists suitable sites first by their longest usable window, numbered; the rest unnumbered', () => {
     expect(ids('window')).toEqual([
-      ['demo-site-bravo', 1],
-      ['demo-site-alpha', 2],
-      ['demo-site-golf', null],
+      ['im2', 1],
+      ['im1', 2],
+      ['bg1', null],
     ]);
   });
 
   it('names the longest usable window "best", whatever the order', () => {
-    for (const order of ['window', 'sunlight', 'earth', 'name'] as const) {
-      expect(
-        bestDemoSite(rankDemoSites(sites, DEFAULT_DEMO_MISSION, skies, RANGE, order))?.site.id,
-      ).toBe('demo-site-bravo');
+    for (const order of ['window', 'sunHours', 'earthHours', 'bothHours', 'name'] as const) {
+      expect(bestSite(rankSites(sites, DEFAULT_DEMO_MISSION, skies, RANGE, order))?.site.id).toBe(
+        'im2',
+      );
     }
-    expect(bestDemoSite([])).toBeUndefined();
+    expect(bestSite([])).toBeUndefined();
   });
 
-  it('can order by sunlight, Earth time or name instead', () => {
-    expect(ids('sunlight')[0]).toEqual(['demo-site-bravo', 1]);
-    expect(ids('earth')[0]).toEqual(['demo-site-alpha', 1]);
-    expect(ids('name').map(([id]) => id)).toEqual([
-      'demo-site-alpha',
-      'demo-site-bravo',
-      'demo-site-golf',
-    ]);
+  it('can order by hours of Sun, of Earth, of both, or name instead', () => {
+    expect(ids('sunHours')[0]).toEqual(['im2', 1]);
+    expect(ids('earthHours')[0]).toEqual(['im1', 1]);
+    expect(ids('bothHours')[0]).toEqual(['im1', 1]);
+    // By name: "IM-1 Odysseus" before "IM-2 Athena"; the unsuitable site stays last.
+    expect(ids('name').map(([id]) => id)).toEqual(['im1', 'im2', 'bg1']);
   });
 
   it('treats a site with no sky as not suitable', () => {
-    const ranked = rankDemoSites(DEMO_SITES.slice(0, 1), DEFAULT_DEMO_MISSION, new Map(), RANGE);
+    const ranked = rankSites(SITES.slice(0, 1), DEFAULT_DEMO_MISSION, new Map(), RANGE);
     expect(ranked[0]?.rank).toBeNull();
   });
 
-  it('runs on the real Sun and Earth: the near-side demo sites suit Mission A this month', () => {
+  it('runs on the real Sun and Earth at the four real landing sites', () => {
     const samples = hourlySky(sampledSpan(RANGE));
-    const real = new Map(
-      DEMO_SITES.map((site) => [site.id, siteSky(samples, site, DEFAULT_DEMO_MISSION, RANGE)]),
-    );
-    const ranked = rankDemoSites(DEMO_SITES, DEFAULT_DEMO_MISSION, real, RANGE);
-    const alpha = ranked.find((entry) => entry.site.id === 'demo-site-alpha');
-    const golf = ranked.find((entry) => entry.site.id === 'demo-site-golf');
-    expect(alpha?.assessment.suitable).toBe(true);
-    // Golf (160° E) is on the far side: the Earth never rises there.
-    expect(golf?.assessment.sky.earthPct).toBe(0);
-    expect(golf?.rank).toBeNull();
+    const ranked = (chosen: DemoMission) =>
+      rankSites(
+        SITES,
+        chosen,
+        new Map(SITES.map((site) => [site.id, siteSky(samples, site, chosen, RANGE)])),
+        RANGE,
+      );
+    // All four landings face the Earth (near side), and all suit Mission A this month.
+    expect(ranked(DEFAULT_DEMO_MISSION).every((entry) => entry.rank !== null)).toBe(true);
+    // IM-2 Athena, 84.8° S: the Sun never climbs to Mission C's 10°, so it fails on power.
+    const athena = ranked(mission('demo-mission-c')).find((entry) => entry.site.id === 'im2');
+    expect(athena?.rank).toBeNull();
+    expect(athena?.assessment.sky.sunPct).toBe(0);
+    expect(athena?.assessment.failTitles[0]).toBe('Not enough sunlight for its power');
   });
 });

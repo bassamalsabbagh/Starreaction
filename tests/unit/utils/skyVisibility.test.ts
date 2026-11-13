@@ -309,3 +309,26 @@ describe('siteSky with a terrain horizon', () => {
     expect(result.sunPct).toBeLessThanOrEqual(smooth.sunPct);
   });
 });
+
+describe('siteSky: hours of Sun, Earth and both (docs/LANDER_RULES.md, "Date range and hours")', () => {
+  it('counts one hour per hourly sample: over 29.5 days, hours = share × 708', () => {
+    const sky = siteSky(hourlySky(sampledSpan(NOV_15)), SOUTH_POLE_SITE, THRESHOLDS, NOV_15);
+    expect(sky.sunHours).toBeCloseTo((sky.sunPct / 100) * 708, 9);
+    expect(sky.earthHours).toBeCloseTo((sky.earthPct / 100) * 708, 9);
+    expect(Number.isInteger(sky.bothHours)).toBe(true);
+    expect(sky.bothHours).toBeLessThanOrEqual(Math.min(sky.sunHours, sky.earthHours));
+    expect(sky.bothHours).toBeGreaterThanOrEqual(sky.sunHours + sky.earthHours - 708);
+  });
+
+  it('counts the hours of a picked range only, not the margin around it', () => {
+    const range = { start: Date.UTC(2026, 11, 12), end: Date.UTC(2026, 11, 26) };
+    const sky = siteSky(
+      hourlySky(sampledSpan(range)),
+      { lat: 12.4, lon: -31.8 },
+      { minSunElevationDeg: -90, minEarthElevationDeg: -90 },
+      range,
+    );
+    // Everything counts as up at −90°: every hour of the 14 days.
+    expect([sky.sunHours, sky.earthHours, sky.bothHours]).toEqual([336, 336, 336]);
+  });
+});

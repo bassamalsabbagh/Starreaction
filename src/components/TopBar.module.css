@@ -25,10 +25,6 @@
   pointer-events: auto;
 }
 
-.cluster:last-child {
-  flex: none;
-}
-
 .brand {
   display: flex;
   flex: none;
@@ -68,8 +64,8 @@
   transform: translateX(-50%);
 }
 
-/* Not enough room beside the clusters (TopBar measures it): the title stays for screen readers
-   only, so it never touches the breadcrumb or the DEMO pill. */
+/* Not enough room beside the breadcrumb (TopBar measures it): the title stays for screen readers
+   only, so it never touches it. */
 .title[data-crowded='true'] {
   width: 1px;
   height: 1px;
@@ -86,47 +82,5 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
-  }
-}
-
-/* The demo pill: Demo Coral, a filled status dot and its words. It is a button into About. */
-.demo {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 30px;
-  padding: 0 var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-status-demo) 45%, transparent);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-status-demo) 10%, transparent);
-  color: var(--color-status-demo);
-  font: inherit;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 120ms ease-out;
-}
-
-.demo:hover {
-  background: color-mix(in srgb, var(--color-status-demo) 18%, transparent);
-}
-
-.demoDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .demo {
-    transition-property: color, background-color, scale;
-  }
-
-  .demo:active {
-    scale: 0.96;
   }
 }

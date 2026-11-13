@@ -15,7 +15,7 @@ import styles from './TimeBar.module.css';
 interface TimeBarProps {
   /** Landing windows at the selected site (Sun and Earth both up), drawn as green zones. */
   windows: readonly TimeWindowMs[];
-  /** Whose windows they are, for the legend ("Demo Site Alpha"); null when no site is selected. */
+  /** Whose windows they are, for the legend ("IM-1 Odysseus"); null when no site is selected. */
   windowsFor: string | null;
   /** Folded to a thin line; the shell keeps this so the overlays above can follow. */
   folded: boolean;

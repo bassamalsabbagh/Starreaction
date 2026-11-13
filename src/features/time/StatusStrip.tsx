@@ -2,17 +2,19 @@ import { useMemo, useState } from 'react';
 import { Tooltip } from '../../components/Tooltip';
 import { joinClassNames } from '../../utils/classNames';
 import { describeElevation, lunarSky, subPoint } from '../../utils/lunarSky';
-import { bodyNow } from '../../utils/riseSet';
+import { bodyNow, forecastText, type PositionSamples } from '../../utils/riseSet';
 import { formatCoordinate } from '../../utils/selenographic';
-import { formatAmman, formatClock, formatDuration } from '../../utils/time';
+import { formatAmman, formatClock } from '../../utils/time';
 import { TimePopover } from './TimePopover';
 import { useTime } from './timeContext';
 import styles from './StatusStrip.module.css';
 
 interface StatusStripProps {
   missionName: string;
-  /** The selected site (demo coordinates), whose sky the chips describe; null shows sub-points. */
+  /** The selected site or point, whose sky the chips describe; null shows sub-points. */
   site: { name: string; lat: number; lon: number } | null;
+  /** A fixed site's own positions (JPL Horizons), used where they have the time; else the engine. */
+  positions?: PositionSamples | null;
   className?: string;
 }
 
@@ -31,9 +33,9 @@ const ARROW = {
 /**
  * The status line above the timeline: the mission, the app time (click to set it), whether that
  * time is live or simulated, and where the real Sun and Earth stand in the selected place's sky,
- * with the time left before each sets (or until it rises).
+ * with a forecast of when each next sets or rises ("Forecast: dark in 2 d 4 h").
  */
-export function StatusStrip({ missionName, site, className }: StatusStripProps) {
+export function StatusStrip({ missionName, site, positions = null, className }: StatusStripProps) {
   const { time, mode, goLive, editorOpen, openEditor, closeEditor } = useTime();
   // The time editor opens above the clock: it is drawn at the page's top level and needs to know
   // where the clock is.
@@ -42,11 +44,9 @@ export function StatusStrip({ missionName, site, className }: StatusStripProps) 
   const sky = useMemo(() => lunarSky(new Date(time)), [time]);
   const chips = site
     ? (['sun', 'earth'] as const).map((body) => {
-        const now = bodyNow(site, body, time);
+        const now = bodyNow(site, body, time, { positions });
         const name = body === 'sun' ? 'Sun' : 'Earth';
-        const next = now.next
-          ? ` · ${now.next.kind === 'set' ? 'sets' : 'rises'} in ${formatDuration(now.next.at - time)}`
-          : '';
+        const next = now.next ? ` · ${forecastText(body, now.next, time)}` : '';
         return {
           key: name,
           up: now.up,

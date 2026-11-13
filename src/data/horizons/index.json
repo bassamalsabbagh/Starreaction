@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "sourceId": "SRC-055",
+  "fetchedUtc": "2026-11-13T14:29:54Z",
+  "startUtc": "2026-11-01T00:00:00Z",
+  "stepMinutes": 10,
+  "count": 61344,
+  "values": "Airless apparent azimuth (clockwise from north) and elevation of the body centre, seen from the site on the 1737.4 km reference sphere (Horizons QUANTITIES 4), in hundredths of a degree",
+  "layout": "planar, little-endian: Sun azimuth uint16, Sun elevation int16, Earth azimuth uint16, Earth elevation int16",
+  "altitude": "0 km altitude = reference height, not measured terrain",
+  "sites": [
+    {
+      "id": "im1",
+      "file": "im1.bin",
+      "lat": -80.13,
+      "lonEast": 1.44,
+      "bytes": 490752,
+      "fetchedUtc": "2026-11-13T13:19:24Z"
+    },
+    {
+      "id": "im2",
+      "file": "im2.bin",
+      "lat": -84.7906,
+      "lonEast": 29.1957,
+      "bytes": 490752,
+      "fetchedUtc": "2026-11-13T14:28:16Z"
+    },
+    {
+      "id": "bg1",
+      "file": "bg1.bin",
+      "lat": 18.5623,
+      "lonEast": 61.8103,
+      "bytes": 490752,
+      "fetchedUtc": "2026-11-13T13:22:09Z"
+    },
+    {
+      "id": "ch3",
+      "file": "ch3.bin",
+      "lat": -69.3741,
+      "lonEast": 32.32,
+      "bytes": 490752,
+      "fetchedUtc": "2026-11-13T14:29:54Z"
+    }
+  ]
+}

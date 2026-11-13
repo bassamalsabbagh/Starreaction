@@ -63,6 +63,9 @@ uniform sampler2D normalNear;
 uniform sampler2D normalFar;
 uniform float ambient;
 uniform float rimDarkening;
+// South of this (z of the surface's up direction), no shading: the map layers there keep their
+// true colours, unchanged by the time. -2 (the default) shades the whole Moon.
+uniform float unshadedBelowZ;
 
 // Bilinear sampling that wraps east-west, so there is no seam at +-180 degrees (Cesium's material
 // textures clamp at their edges). Away from that edge the hardware filter gives the same result in
@@ -91,6 +94,11 @@ czm_material czm_getMaterial(czm_materialInput materialInput)
     vec3 positionWC = (czm_inverseView * vec4(-materialInput.positionToEyeEC, 1.0)).xyz;
     vec3 up = normalize(positionWC);
     vec2 uv = vec2(atan(up.y, up.x) / czm_twoPi + 0.5, asin(clamp(up.z, -1.0, 1.0)) / czm_pi + 0.5);
+    if (up.z < unshadedBelowZ) {
+        material.diffuse = vec3(0.0);
+        material.alpha = 0.0;
+        return material;
+    }
 
     // Texels per screen pixel, measured without the jump at +-180 degrees (a whole turn, not motion).
     vec2 du = dFdx(uv);

@@ -3,9 +3,11 @@
 This document defines **how** lander constraints and site rankings are represented. It must be
 filled in with sourced values **before** any constraint or scoring logic is implemented in code.
 
-> **Status:** template only. No lander constraints or ranking criteria have been researched or
-> agreed yet for **real** landers. Nothing below is a fact about any real lander. The gates and
-> score agreed on 2026-10-26 apply only to the practice demo fixture (see below).
+> **Status (2026-11-13):** the sites are now the four **real** landings (data/sites.json, "Real
+> landing sites" below) with Sun and Earth positions from JPL Horizons. The **missions** (their
+> minimum Sun and Earth heights, days of power and relay) are still made up for practice and keep
+> their "Demo Mission" names. Lander facts come only from `data/landers.json` with sources ("Lander
+> night survival"). No weighted score is used anywhere.
 
 ## Rules for this document
 
@@ -48,10 +50,10 @@ _Not yet defined._ When defined, record:
 
 ## Practice demo fixture (not a methodology)
 
-`src/data/demoData.ts` holds made-up mission profiles and sites so the UI can be exercised. It is
-**not** a ranking methodology and nothing in it is sourced; the UI labels it DEMO. It must be
-replaced by a methodology documented above before any real data is used. **Every number in this
-section is DEMO** (made up for practice), except the Sun and Earth positions, which are real.
+`src/data/demoData.ts` holds the made-up mission profiles (Demo Mission A, B, C) and the checks.
+Since 2026-11-13 the **sites are real** (data/sites.json, below) and the demo sites are gone. **The
+mission needs in this section are DEMO** (made up for practice); the Sun and Earth positions are
+real.
 
 ### In plain words (agreed 2026-11-11)
 
@@ -90,12 +92,16 @@ Whatever the order, **"best"** (the highlighted card, the time bar's "Best site"
 "Launch slipped?" sentence) always means the suitable site with the longest usable window, ties by
 name (2026-11-12):
 
-| Order           | Sorted by (highest first; ties by name)                       |
-| --------------- | ------------------------------------------------------------- |
-| Longest window  | the usable stretch the power check uses (default)             |
-| Most sunlight   | share of the range with the Sun up (`minSunElevationDeg`)     |
-| Most Earth time | share of the range with the Earth up (`minEarthElevationDeg`) |
-| Name            | A–Z                                                           |
+| Order               | Sorted by (highest first; ties by name)                       |
+| ------------------- | ------------------------------------------------------------- |
+| Longest window      | the usable stretch the power check uses (default)             |
+| Most hours of Sun   | hours in the range with the Sun up (`minSunElevationDeg`)     |
+| Most hours of Earth | hours in the range with the Earth up (`minEarthElevationDeg`) |
+| Most hours of both  | hours in the range with both up at once                       |
+| Name                | A–Z                                                           |
+
+The two share-based orders (most sunlight, most Earth time) were replaced by hours on 2026-11-13
+("Date range and hours" below).
 
 These are orderings of measured values, not a weighted score; no weights are involved.
 
@@ -114,6 +120,175 @@ not known) gives only a lower bound, so both numbers say "at least" (for example
 - **Where:** Site details ("Mission needs met"), each Sites list row ("6.5× what it needs"; a site
   that is not suitable shows "61% of needs met · 1.2 d short of 3 d") and a Compare row. Code:
   `src/data/needsMet.ts`.
+
+### Real landing sites (agreed 2026-11-13)
+
+The Sites list, Compare, the map and the assistant use the four real landings in `data/sites.json`,
+read and checked by `src/services/sites.ts` (every problem listed; a bad file fails the tests):
+
+| id  | Name                 | Region                            | Lat (N+) | Lon (E+) | Lander          | Landed     |
+| --- | -------------------- | --------------------------------- | -------- | -------- | --------------- | ---------- |
+| im1 | IM-1 Odysseus        | near Malapert A                   | −80.1300 | 1.4400   | `nova-c`        | 2024-02-22 |
+| im2 | IM-2 Athena          | Mons Mouton region                | −84.7906 | 29.1957  | `nova-c`        | 2025-03-06 |
+| bg1 | Blue Ghost Mission 1 | near Mons Latreille, Mare Crisium | 18.5623  | 61.8103  | `blue-ghost-1`  | 2025-03-02 |
+| ch3 | Chandrayaan-3 Vikram | Shiv Shakti Point                 | −69.3741 | 32.3200  | `chandrayaan-3` | 2023-08-23 |
+
+- **Schema:** id, name, region (or null), lat (north-positive), lonEast (east-positive), landerId
+  (a lander in `data/landers.json`), landingDateUtc, landingOutcome and landingOutcomeSource,
+  missionOutcome and missionOutcomeSource, coordSource, coordNote (or null), sourceIds (DATA_SOURCES
+  ids), why. Each source is a URL or "TODO (…)"; a value whose own source is a TODO is tagged
+  "source TODO".
+- **Sources (Ayah, 2026-11-13):** every coordinate is LROC's (SRC-057 to SRC-060), and each
+  landing and mission outcome has its own source (SRC-024, SRC-027, SRC-035, SRC-058, SRC-060 to
+  SRC-063). ch3 uses LROC's observed site; its note says ISRO's planned target was 69.367621° S,
+  32.348126° E (DATA_SOURCES conflict 16). IM-1's tilt after landing is not sourced and not shown.
+  Landing dates: SRC-023, SRC-027, SRC-035, SRC-032. The "why" lines are team drafts. Landing
+  outcome and mission outcome are separate fields and both are shown.
+- **Terrain:** im1 and im2 (south of 80° S) use a LOLA terrain horizon once the elevation file is
+  loaded (Phase C); until then, and always for bg1 and ch3, the horizon is flat and labelled "Flat
+  horizon: no terrain data for this site". im1 sits on the 80° S edge of the polar map: any
+  direction whose ray reaches the edge of the data before its full distance is labelled "cut off
+  at data edge".
+- **Labels:** the "Data: Demo" label is removed (the sites are real). The missions stay made up and
+  keep their "Demo Mission" names, and the mission picker and About page say so.
+
+### Sun and Earth positions: JPL Horizons (agreed 2026-11-13)
+
+- **Fixed sites:** the Sun's and the Earth's airless apparent azimuth and elevation, seen from the
+  site on the 1737.4 km reference sphere at 0 km altitude (a reference height, not measured
+  terrain), every 10 minutes from 2026-11-01 00:00 to 2027-12-31 23:50 UTC, from the JPL Horizons
+  API (SRC-055; `scripts/fetch_horizons.ts`, `src/services/horizonsData.ts`). Labelled "Sun and
+  Earth positions: JPL Horizons".
+- **Same checks:** every check, share, window and night uses one sample per whole hour, as before;
+  for a fixed site each hour's sample is the Horizons value at that time. A body is **up** when its
+  centre is at or above the mission's minimum height and, where the site has a terrain horizon,
+  above the terrain in its direction; otherwise above the flat horizon.
+- **Sunset and Earthset for fixed sites:** found from the 10-minute Horizons samples, the crossing
+  placed by straight-line interpolation between the two samples around it.
+- **Clicked points, and dates outside the files:** our engine (astronomy-engine, SRC-022), labelled
+  "Sun and Earth positions: our engine (checked against JPL Horizons)". A range only partly inside
+  the files uses Horizons for the hours it covers and the engine for the rest, and says so.
+- The browser never calls Horizons. "View in JPL Horizons" (Site details) opens the same API query
+  for the selected site and range in a new tab: plain text, 1-hour steps, `QUANTITIES='4'`, one
+  link for the Sun and one for the Earth (Horizons takes one target per request).
+
+### Checked against JPL Horizons (agreed 2026-11-13)
+
+`npm run horizons:check` (`scripts/horizons_check.ts`) writes `docs/HORIZONS_CHECK.md` and the About
+page's table (`src/data/horizonsCheck.json`):
+
+- **(a)** Our engine (no terrain) against the API files for im1 and im2 over three days, every 10
+  minutes: the largest and mean elevation difference per body; **fails above 0.2°**. The Earth's
+  parallax from the site is at most about 0.26°, so an Earth failure with a Sun pass would mean the
+  engine measures from the Moon's centre.
+- **(b)** Ayah's web-app exports (SRC-056): each row's `*` (daylight) and `i` (Earth up) flag must
+  agree with the API data at the same time. Horizons sets these flags from the disc's **upper
+  limb**, the API data gives the **centre**; converting needs the disc's angular radius, which is
+  not agreed here (**missing equation**), so rows with the centre within **1°** of the horizon
+  (team assumption) are listed and not judged.
+- **(c)** The exports with "Azi (a-app) Elev" columns (bg1 and ch3 Sun): elevations must match the
+  API data within 0.2° (bg1's rounded coordinates, about 70 m, are negligible).
+- A file whose header does not say "Center body name: Moon (301)" is skipped and reported.
+- **Result (2026-11-13):** all pass. (a) at most 0.0068° (Sun) and 0.0055° (Earth); (b) no
+  disagreement, 28 rows near the horizon, all consistent with an upper-limb reading; (c) at most
+  0.0058° (ch3, after its coordinates moved about 40 m from those in Ayah's export; re-checked 2026-11-13).
+
+### Date range and hours (agreed 2026-11-13)
+
+- **Range:** start and stop dates (UTC) in the Mission panel: from 00:00 UTC on the start date to
+  00:00 UTC after the stop date (the stop date is included). Until the user picks dates, the range
+  is the time bar's 29.5 days, as before. At most 12 months.
+- **Delay 1 week / Delay 1 month** shift both dates by 7 days, or by one calendar month (a day the
+  month lacks becomes its last day). The "Launch slipped?" assistant can also fill the range
+  ("between 12 Dec and 25 Dec": the AI only reads the two dates from the text; the app checks
+  them). As built: every number and the month must appear in the text; a missing day means the
+  1st on the first date and the month's last day on the last; a missing year on the first date
+  means the next one on or after the time bar's month, and on the last date the next one on or
+  after the first date's month (so "28 Nov to 5 Dec" read in December runs into next year); a
+  range together with a shift or a single date is an error and Apply stays off. Picking dates (by
+  hand, a delay or the assistant) moves the app's time to 00:00 UTC on the start date; the checks
+  keep the picked dates while the time bar moves.
+- **Hours:** for each site, over the range, the **hours of Sun** (Sun at or above the mission's
+  minimum), **hours of Earth** (Earth at or above its minimum) and **hours of both** (both at once),
+  counted from the hourly samples (one hour each). Shown in the Sites list and in Compare.
+- **Order of the Sites list:** suitable sites first, as before; the user orders by longest window
+  (default), most hours of Sun, most hours of Earth, most hours of both, or name. Measured values,
+  no weights. A full 29.5-day range gives the same numbers as before: hours = share × range hours.
+
+### Light, water and Earth over the year (agreed 2026-11-13)
+
+At the top of Site details and as columns in Compare, each with its data-status tag (Real data /
+Calculated / Assumed / Unavailable) and source:
+
+- **Light:** % of the year in sunlight, from the PGDA south-polar lighting product (terrain
+  included). **Unavailable** until Mahmoud's files are in `data/raw/`. bg1 and ch3: "Not
+  applicable: outside south-polar data".
+- **Water:** "Nearest permanent shadow (where ice may be): X km", the nearest pixel with 0%
+  illumination in the same product, computed offline (Python). Never says ice is there.
+  **Unavailable** until the files arrive; bg1 and ch3: "Not applicable: outside south-polar data".
+- **Earth:** % of the year the Earth's centre is above the horizon, from the Horizons files
+  (SRC-055) over **calendar year 2027** (the only full year inside them; team choice), flat horizon
+  (the terrain horizon once a site has one). Calculated, for all four sites.
+
+### Timeline (agreed 2026-11-13, Phase E)
+
+A "Timeline" tab in Compare shows, for each compared site, **12 months from the start date** as one
+row of bars. It adds no new check or measure: it draws the existing Sun-up and Earth-up tests.
+
+- **`yearWindows(site, start, months = 12, stepHours = 6)`:** for each 6-hour step from 00:00 UTC on
+  the start date, the Sun and the Earth at the step's start are tested exactly as the checks test
+  them: at or above the mission's minimum height and, where the site has a terrain horizon, above
+  the terrain. Positions as everywhere (JPL Horizons for the four sites inside the files, our engine
+  outside them, labelled). Each step stands for its 6 hours, so the bars are a coarse view; the
+  hours in the Sites list and Compare stay hourly.
+- **Colours:** green = both up, yellow = Sun only, blue = Earth only, nothing = neither. They must
+  read on a projector and for colour-blind viewers (strong contrast, a legend, and the state in
+  text on hover/focus).
+- **Bracket:** a see-through bracket as wide as the selected range (the picked dates, or the time
+  bar's 29.5 days). Dragging it moves the start and stop dates together by whole days, kept inside
+  the 12 months, and every site's hours, the checks and the Sites list update as it moves. Map
+  markers are green when the site passes every check for the dates checked and red when it does
+  not (the same "suitable" verdict as the Sites list), so they recolour as the bracket moves.
+- **As built (2026-11-13):** the default 29.5-day range counts as 30 whole days from its first
+  day, so the first drag turns it into picked dates 30 days long. The 12 months stay put while the
+  bracket moves. The map markers are green or red **at all times** (not only in the Timeline), by
+  the suitable verdict for the dates checked; they were off-white and grey before.
+
+### Distances (agreed 2026-11-13)
+
+Haversine on a sphere of R = 1737.4 km: d = 2R·asin√(sin²(Δφ/2) + cos φ₁·cos φ₂·sin²(Δλ/2)).
+Distance from the south pole is the same formula to latitude −90°. Shown in Site details and
+Compare.
+
+### Lander night survival (agreed 2026-11-13)
+
+- **Data:** `data/landers.json` (Miral, 2026-11-13): a list of landers (`nova-c`,
+  `blue-ghost-1`, `griffin-1`, `chandrayaan-3`), each with `solarPowerW`, `batteryWh`, `heaterW`,
+  `panelAreaM2`, `touchdownSlopeDeg`, each `{ value, tag, source, note }`. Tags: S opened source,
+  S\* seen on a secondary page, D derived, A assumption, "not published" (value null). A site finds
+  its lander by `landerId`. Sources: DATA_SOURCES SRC-033 and SRC-064 to SRC-068.
+- **`heaterW` is the whole night load** (heater plus electronics), labelled "Night load (heater +
+  electronics)", never "Heater". Nova-C's 100 W is a **team assumption** (tag A): Intuitive
+  Machines said IM-1 had roughly 10 to 20 hours of battery left after sunset, which with 1554 Wh
+  implies about 78 to 155 W; 100 W is the middle (Miral's note).
+- **Hours the battery lasts** = batteryWh ÷ heaterW, against the **longest darkness** in the
+  selected range (the longest unbroken run of hours with the Sun's centre below the horizon; "at
+  least" when it touches the range's edge). "Survives" or "Doesn't survive" **only when both values
+  are non-null**; otherwise "Can't judge: not published". When the darkness is only a lower bound
+  (it touches the range's edge), a battery shorter than it still "Doesn't survive", but one that
+  outlasts it gives "Can't judge: the night runs past the dates checked" (QA, 2026-11-13: a one-day
+  range at IM-1 had read "Survives" against "at least 14 h" of a 323 h night).
+- **Today:** Nova-C 1554 Wh ÷ 100 W = **15.5 h** (survives 10 h of darkness, fails 43 h); Blue
+  Ghost 1, Griffin-1 (upcoming, every value not published) and Chandrayaan-3: "Can't judge: not
+  published".
+- **Battery needed here:** night load W × longest darkness h = X Wh, and X ÷ 143 Wh/kg = Y kg (the
+  Power check's battery figure, SRC-046, derived). The night load here is the user's own choice on
+  the Power check's slider (default 20 W), not the lander's value, and the text says so; the verdict
+  line names the lander's value and its tag (Nova-C 100 W, assumed).
+- Every value shows its tag (S, S\*, A, not published) and source, and the note where it records a
+  conflict: Nova-C's 788 W against 200 W (conflict 19), and 1554 Wh against 700 Wh (conflict 18).
+  `touchdownSlopeDeg` is information only (Chandrayaan-3: up to 12°, tag S, ISRO), never a pass
+  or fail.
 
 ### Sunset, Earthset and the horizon view
 
@@ -197,7 +372,9 @@ Points and sites without a horizon keep the smooth-sphere horizon.
   per pixel, 80° S to the pole). Its source is **not yet recorded** in `DATA_SOURCES.md`, so it
   must not be committed or deployed until it is: the generated `src/data/terrainHorizons.ts` is
   git-ignored and loaded only if present (`import.meta.glob`), so without it every site keeps the
-  smooth horizon. Only Demo Site India lies inside the map.
+  smooth horizon. The local TEST file was made for a former demo site (2026-11-13) and matches no
+  current site; im1 and im2 get their horizons when Mahmoud's file arrives (Phase C), each
+  direction cut by the map's edge marked `edgeCut` ("cut off at data edge").
 - **Limitations:** 80 m pixels (smaller rocks and rims are missed); the Sun's centre, not its disc;
   the site's own slope counts as terrain; no light bounced from terrain.
 
@@ -224,10 +401,43 @@ exists for each lander. Code: `src/utils/elevationGrid.ts` (pure), `src/services
   it), so it smooths anything smaller.
 - **Shown:** on the place card, "Elevation X m · Slope Y°" with the source and pixel size; "No
   elevation data loaded yet" with no file; "No elevation data here" outside the area or on gaps.
-  "Elevation" and "Slope" map layers stay off, with the same note, until a file is loaded; their
-  colours are a continuous scale, never pass/fail colours.
+  "Elevation" and "Slope" map layers appear only once a file is loaded (no greyed-out buttons,
+  2026-11-13); their colours are a continuous scale, never pass/fail colours.
 - **Tests use made-up grids only** (a flat plane, a known tilted plane and a bowl, built inside the
   tests). No made-up grid is ever shown in the app or committed as data.
+
+### Map layers: elevation and slope (agreed 2026-11-13, Phase C)
+
+The team's rasters (DATA_SOURCES SRC-073): for each layer a **numerical** GeoTIFF (values) and a
+`*_color.tif` (its intended look, rendered by the team). Both are 15200 × 15200 at 40 m on the
+south polar stereographic grid of the 1737.4 km sphere (centre 90° S, 0° E up), ±304 km.
+
+- **Values come only from the numerical TIFF, colours only from the colour TIFF.** No value is ever
+  read from a colour. The colours are copied pixel for pixel (nearest pixel, no blending).
+- **Coverage:** 80° S to the pole. Outside it: "No data here: this tool covers 80° S to the pole".
+  Inside, a pixel the numerical TIFF marks NoData reads "No data" and draws transparent; a valid
+  0 stays a value.
+- **Resolution (team decision):** values at **160 m** for all of 80–90° S (each value is the mean of
+  the 4 × 4 underlying 40 m pixels that hold data) and at the full **40 m** in a 40.96 km square
+  patch around IM-1 and around IM-2. The readout names the resolution used at that spot. The
+  display follows the same split: the 160 m view everywhere, the 40 m colours inside the patches.
+- **Encoding of the value tiles** (static files, 256 × 256, little-endian, row 0 at the top):
+  elevation int16 metres, signed (value = stored × 1 m + 0 m; NoData −32768); slope uint16
+  (degrees = stored × 0.01; NoData 65535). Documented with the source in DATA_SOURCES SRC-073.
+- **Readout:** the value of the pixel under the cursor (desktop) or the tapped point (mobile) for
+  the **active layer**, with its unit, resolution, tag and source. A tile is fetched only when
+  needed; nothing loads the full rasters into the browser.
+- **Legends:** elevation in metres, slope in degrees, read from matching value and colour pixels of
+  the team's files (which colour the team's render gives each value), never invented.
+- **Fixed in time:** the layers do not change with the date or time.
+- **Labels:** "Slope: average over one pixel (160 m or 40 m), not a pass/fail"; no slope pass/fail.
+- **Status (2026-11-13, 21:34):** the first `elevation_40m.tif` was empty (0 bytes); the team then
+  supplied `Elevation.tiff`, and both layers now have values, legends and colours.
+- **As built (2026-11-13):** a "Map layers" panel (switch, opacity and legend per layer, "Readings
+  from" choice); each layer's 512 px previews first, then the full quarters and the 40 m patches;
+  elevation under slope. The earlier single-grid elevation path (`docs/ELEVATION_DATA.md`) is no
+  longer used for display or readout. **Not done:** moving the camera to a straight-down south-pole
+  view when a layer is switched on (plan C4): the app has no such view yet.
 
 ### Power check (Miral's Moon power lab; agreed 2026-11-13)
 
@@ -241,7 +451,8 @@ check, the order of the list or a window. Code: `src/data/powerCheck.ts`,
   range) with the Sun's centre below 0°, from the hourly samples. A night that reaches the edge of
   the month is only a lower bound ("at least").
 - **Sliders (teaching defaults, labelled so):** panel flat or standing; area 0.5–4 m² (default 1);
-  heater 5–100 W (default 20); battery 5–200 kg (default 30).
+  night load 5–100 W (default 20; labelled "Night load (heater + electronics)" since 2026-11-13,
+  never "Heater"); battery 5–200 kg (default 30).
 - **Panel power** = 1361 W/m² × area × 0.30 × angle factor. Flat panel: sin(Sun height). Standing
   panel facing the Sun: cos(Sun height). Both are 0 while the Sun is down. (The team file uses 1
   for the standing panel, which is wrong when the Sun is high; not copied.)
@@ -259,7 +470,8 @@ check, the order of the list or a window. Code: `src/data/powerCheck.ts`,
 
 Agreed 2026-11-10; simplified 2026-11-11. Clicking any point on the Moon that is not a site, or
 typing its coordinates, gives that point **exactly the checks a site gets** (above), from the same
-hourly samples and range, plus the nearest demo site and its great-circle distance (mean sphere).
+hourly samples and range, plus the nearest landing site and its great-circle distance (mean
+sphere).
 A point is not put in the Sites list or in Compare. Code: `src/data/pointCheck.ts`;
 `src/utils/lunarSky.ts` (`greatCircleKm`).
 
@@ -303,7 +515,7 @@ the user's text into the settings the app already has. Code: `api/slip.ts` (serv
    e.g. "Demo Mission A (2)"; the demo missions are never edited); **Edit** opens the Mission form
    with the same values and date.
 7. **The explanation** is a fixed sentence filled from the app's own results after Apply (the site
-   with the longest usable window, its length and dates, and how many demo sites pass all the checks
+   with the longest usable window, its length and dates, and how many sites pass all the checks
    over the time bar's range). No AI-written text is shown.
 8. **Failure:** no key, no network, a timeout, a refusal or a malformed reply all end the same way:
    "The assistant isn't available right now", and the Mission form (which has a date field) does
@@ -318,11 +530,13 @@ the user's text into the settings the app already has. Code: `api/slip.ts` (serv
      One month alone means that month. No month: _where_ uses the time bar's range (as the Sites
      list does); _when_ uses the six ranges from the time bar's range on (as Other dates does). At
      most 12 months; dates outside 1990–2100 are errors.
-   - **Site:** a site name must appear in the text and match a demo site (ignoring case, spacing
-     and a leading "Demo"); otherwise every demo site is checked and the user is told why.
+   - **Site:** a site name must appear in the text and match one of the four sites (ignoring case,
+     spaces and hyphens), by its name, its id or an alias: im1 "IM-1", "Odysseus"; im2 "IM-2",
+     "Athena"; bg1 "Blue Ghost"; ch3 "Chandrayaan-3", "Chandrayaan", "Vikram" (2026-11-13).
+     Otherwise every site is checked and the user is told the name "isn't one of our sites".
    - **Answer:** the same checks as everywhere (`siteSky`, `assessSky`): with a named site, that
      site's best window over the months and whether it passes all the checks; otherwise the best site
-     (`bestDemoSite`: the suitable site with the longest usable window) and its best window. The
+     (`bestSite`: the suitable site with the longest usable window) and its best window. The
      mission is the one named in the text if it is in the list, otherwise the selected one.
      **Go there** selects the site and moves the time bar to the window's start. The answer is a
      fixed layout filled from the app's numbers; no AI-written text is shown.
@@ -332,14 +546,14 @@ the user's text into the settings the app already has. Code: `api/slip.ts` (serv
      question, the site and the months; the app answers over the months asked, or the time bar's
      range when none are given, with the same `siteSky`/`assessSky` as the Sites list):
      - _How many days of sunlight at X?_ (`about: "sunlight"`): the longest unbroken stretch with
-       the Sun at or above the mission's minimum, and the total time it is up. Needs a named demo
-       site; without one the app asks for it.
-     - _Which site has the most Earth time?_ (`about: "earth"`): the demo site with the largest
+       the Sun at or above the mission's minimum, and the total time it is up. Needs a named site;
+       without one the app asks for it.
+     - _Which site has the most Earth time?_ (`about: "earth"`): the site with the largest
        share of time with the Earth at or above the mission's minimum (ties by name), with that
        share.
      - _Does X pass for Mission Y?_ (`about: "passes"`): whether the named site passes all the
        checks for the mission named in the text (or the selected one), each failure named, and the
-       % of mission needs met. Needs a named demo site.
+       % of mission needs met. Needs a named site.
    - Any other question ("how much power does it need?") is not read: it goes under "Couldn't
      read", and the box says what it can read.
 10. **Examples:** clickable example sentences under the box fill it in and read it at once.
@@ -383,3 +597,11 @@ the user's text into the settings the app already has. Code: `api/slip.ts` (serv
 | 2026-11-13 | "Launch slipped" assistant: past months allowed and labelled "in the past"; three more questions read by the AI and answered by the app (days of sunlight at a site, the site with the most Earth time, does a site pass for a mission); a plain "Nothing changed" with an example (rules 9 and 11)                                                                                                                                   | Overnight plan item 4: users ask these; the app already has every answer, so the AI only routes the question                                                                 | User                                            |
 | 2026-11-13 | Power check in Site details from Miral's Moon power lab (rule above): information only; panel W = 1361 × area × 0.30 × sin or cos of the Sun height; battery kg = heater W × night hours ÷ 143; sliders with teaching defaults; sources SRC-044 to SRC-046                                                                                                                                                                            | Overnight plan item 9: shows the panel and battery trade-off behind the power check, with the app's own Sun height and night length                                          | User                                            |
 | 2026-11-13 | Elevation and slope at a point (rule above): built with no data; a PGDA south-pole LOLA GeoTIFF becomes a small grid offline (scripts/data/elevation_grid.py); slope by Horn's method over the grid spacing; facts only, no pass/fail; layers off until a file is loaded                                                                                                                                                              | Overnight plan item 7 (replaced): ready for the real file, so loading it is one command; no slope limit is sourced yet                                                       | User                                            |
+| 2026-11-13 | **Real landing sites** replace every demo site (rule "Real landing sites"): im1, im2, bg1, ch3 from `data/sites.json`, landing and mission outcome shown separately, unsourced values tagged "source TODO"; the "Data: Demo" label removed; missions stay made up and named "Demo Mission"                                                                                                                                            | The team's final plan (Phase A1); the challenge is about real south-pole sites                                                                                               | User                                            |
+| 2026-11-13 | **Sun and Earth positions from JPL Horizons** for the fixed sites (10-minute API files, 2026-11-01 to 2027-12-31), our engine for clicked points and other dates, each labelled; checked against Horizons three ways (rules "Sun and Earth positions" and "Checked against JPL Horizons")                                                                                                                                             | Final plan A2–A4: the positions come from NASA/JPL's own system, and the engine is shown to agree                                                                            | User                                            |
+| 2026-11-13 | **Start and stop dates**, Delay 1 week / 1 month, and **hours of Sun, Earth and both** in the Sites list and Compare (rule "Date range and hours")                                                                                                                                                                                                                                                                                    | Final plan A5: users plan for their own launch window, in hours rather than shares                                                                                           | User                                            |
+| 2026-11-13 | **Light, water and Earth over the year; distances; lander night survival** (rules above): PGDA-based values Unavailable until the files arrive; Earth % from the Horizons files over 2027; survival only with both battery and heater values published                                                                                                                                                                                | Final plan Phase B; no value is shown without its data                                                                                                                       | User                                            |
+| 2026-11-13 | **Sources in:** Ayah's LROC coordinates and per-outcome sources for the four sites (im2 moved to 84.7906° S, 29.1957° E and ch3 to LROC's observed 69.3741° S, 32.32° E; Horizons re-fetched for both and re-checked); Miral's `data/landers.json` with the night load (`heaterW`) at 100 W, tag A                                                                                                                                    | Every site value now has a source; night survival can be judged for Nova-C (15.5 h)                                                                                          | User                                            |
+| 2026-11-13 | **Timeline** in Compare (rule "Timeline"): 12 months of 6-hour Sun/Earth states per site from the existing checks, a draggable bracket that moves the picked dates, map markers green/red by the existing suitable verdict                                                                                                                                                                                                            | Final plan Phase E (below the cut line; started after Phases A, B and D were green); no new measure                                                                          | User                                            |
+| 2026-11-13 | **Map layers (Phase C)** from the team's elevation and slope rasters (rule "Map layers"): values at 160 m across 80–90° S and 40 m around IM-1 and IM-2, colours copied from the team's colour TIFFs, on-demand static value tiles with the documented encoding                                                                                                                                                                       | User's decisions on delivery and encoding; no backend or new package                                                                                                         | User                                            |
+| 2026-11-13 | **"Launch slipped?" assistant removed from the website, kept as a future plan:** the feature flag `VITE_SLIP_ASSISTANT` is now off by default (set it to "on" to show it). The code, its rules above and `api/slip.ts` stay; About lists it as planned                                                                                                                                                                                | User's decision: the site works without it; it can return later                                                                                                              | User                                            |

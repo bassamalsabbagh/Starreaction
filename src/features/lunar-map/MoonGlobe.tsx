@@ -35,6 +35,8 @@ import {
   SceneTransforms,
   ScreenSpaceEventType,
   SingleTileImageryProvider,
+  TextureMagnificationFilter,
+  TextureMinificationFilter,
   VerticalOrigin,
   WebMapTileServiceImageryProvider,
 } from 'cesium';
@@ -46,8 +48,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react';
-import { formatDays, type RankedDemoSite } from '../../data/demoData';
-import { layerPixels, type ElevationGrid, type ElevationLayer } from '../../utils/elevationGrid';
+import { formatDays, type RankedSite } from '../../data/demoData';
 import {
   MIN_HEIGHT_M,
   MOON_RADIUS_M,
@@ -73,6 +74,7 @@ import {
 } from './cameraControls';
 import { PREVIEW_FAILURE_THRESHOLD, PREVIEW_IMAGERY, type ImageryStatus } from './mapLabels';
 import { MapControls } from './MapControls';
+import { SHADE_EVERYWHERE, type LayerDisplay, type LayerImageSpec } from './mapLayerState';
 import {
   AMBIENT,
   COLOUR_FADE_MS,
@@ -121,6 +123,7 @@ Ellipsoid.default = Ellipsoid.MOON;
 Ion.defaultAccessToken = '';
 
 const SITE_ENTITY_PREFIX = 'site:';
+const NO_LAYERS: readonly LayerDisplay[] = [];
 const NO_IDS: readonly string[] = [];
 const MARKER_HEIGHT_M = 200;
 /** Grid lines: lifted above the surface and cut finely enough that a segment sags < 1 m. */
@@ -181,7 +184,7 @@ interface GlideState {
 }
 
 interface MoonGlobeProps {
-  rankedSites: readonly RankedDemoSite[];
+  rankedSites: readonly RankedSite[];
   selectedSiteId: string | null;
   /** A site highlighted from outside the map (a hovered list row); its beacon grows. */
   hoveredSiteId: string | null;
@@ -195,11 +198,26 @@ interface MoonGlobeProps {
   onPickPoint?: (point: { lat: number; lon: number }) => void;
   showGrid: boolean;
   onShowGridChange: (show: boolean) => void;
-  /** The south-pole elevation or slope layer to draw, with its grid; null draws none. */
-  elevationLayer?: { layer: ElevationLayer; grid: ElevationGrid } | null;
-  /** Whether an elevation file is loaded (the layer buttons stay off without one). */
-  elevationAvailable?: boolean;
-  onElevationLayerChange?: (layer: ElevationLayer | null) => void;
+  /**
+   * The map layers (elevation, slope) to draw, lowest first, each with its images and opacity. A
+   * layer loads nothing until it is first visible; it never changes with the time.
+   */
+  mapLayers?: readonly LayerDisplay[];
+  /** Opens or closes the map layers panel (the icon column's button). */
+  onToggleLayers?: () => void;
+  layersOpen?: boolean;
+  /**
+   * The ground point under the pointer (degrees), about ten times a second, or null off the Moon:
+   * the layers' readout. Without it, nothing is picked for it.
+   */
+  onHoverGround?: (point: { lat: number; lon: number } | null) => void;
+  /**
+   * Where the Sun-and-relief shading stops (unshadedBelowZ in mapLayerState): south of the layers'
+   * coverage while one is visible, so they keep their true colours whatever the time.
+   */
+  layerShadeCutZ?: number;
+  /** Some of a layer's images could not be loaded (the panel says so). */
+  onLayerImagesFailed?: (layerId: string) => void;
   imageryStatus: ImageryStatus;
   onImageryStatusChange: (status: ImageryStatus) => void;
   /** How much of each map edge the chrome covers (sidebars, status strip, time bar), in px. */
@@ -226,6 +244,8 @@ interface MoonGlobeProps {
    * flown to close up lands in the middle of what is left, not under the panel.
    */
   getCoveredLeft?: () => number;
+  /** How the beacons' hover text names the mission: "this DEMO mission", or "this mission". */
+  missionWords?: string;
 }
 
 interface HoverTip {
@@ -234,11 +254,15 @@ interface HoverTip {
   y: number;
 }
 
-function hoverText({ site, assessment, rank }: RankedDemoSite, compared = false): string {
+function hoverText(
+  { site, assessment, rank }: RankedSite,
+  compared = false,
+  missionWords = 'this mission',
+): string {
   const tag = compared ? ' · In compare' : '';
   if (rank === null) {
     const reason = assessment.failTitles[0];
-    return `${site.name} · Not suitable for this mission${reason ? `: ${reason}` : ''}${tag}`;
+    return `${site.name} · Not suitable for ${missionWords}${reason ? `: ${reason}` : ''}${tag}`;
   }
   return `#${rank} ${site.name} · window ${formatDays(assessment.usableDays)}${tag}`;
 }
@@ -273,9 +297,12 @@ export function MoonGlobe({
   onPickPoint,
   showGrid,
   onShowGridChange,
-  elevationLayer = null,
-  elevationAvailable = false,
-  onElevationLayerChange,
+  mapLayers = NO_LAYERS,
+  onToggleLayers,
+  layersOpen = false,
+  onHoverGround,
+  layerShadeCutZ = SHADE_EVERYWHERE,
+  onLayerImagesFailed,
   imageryStatus,
   onImageryStatusChange,
   viewInsets,
@@ -287,6 +314,7 @@ export function MoonGlobe({
   onPresent,
   getCoveredLeft,
   idleDrift = true,
+  missionWords = 'this mission',
 }: MoonGlobeProps) {
   const coveredLeftRef = useRef(getCoveredLeft);
   useEffect(() => {
@@ -345,6 +373,13 @@ export function MoonGlobe({
   const glideToRef = useRef<(height: number, anchor: LonLat | null) => void>(() => undefined);
   const glideRef = useRef<GlideState>({ target: 0, anchor: null, frameId: 0, last: 0 });
   const onHoverRef = useRef(onHoverSite);
+  const onHoverGroundRef = useRef(onHoverGround);
+  const onLayerFailedRef = useRef(onLayerImagesFailed);
+  /** The map layers' imagery, by layer id, and the latest description of them. */
+  const layerImageryRef = useRef(
+    new Map<string, { preview: ImageryLayer[]; full: ImageryLayer[]; failed: boolean }>(),
+  );
+  const mapLayersRef = useRef(mapLayers);
   /** Each beacon's animated scale and fade-in. */
   const beaconAnimRef = useRef(new Map<string, BeaconAnim>());
   /** The beacon under the pointer, and the one highlighted from the list. */
@@ -367,6 +402,8 @@ export function MoonGlobe({
     statusRef.current = imageryStatus;
     onStatusRef.current = onImageryStatusChange;
     onHoverRef.current = onHoverSite;
+    onHoverGroundRef.current = onHoverGround;
+    onLayerFailedRef.current = onLayerImagesFailed;
     sitesRef.current = rankedSites;
   });
 
@@ -495,6 +532,7 @@ export function MoonGlobe({
           normalFar: MOON_IMAGES.normalLow,
           ambient: AMBIENT,
           rimDarkening: RIM_DARKENING,
+          unshadedBelowZ: SHADE_EVERYWHERE,
         },
         source: MOON_RELIEF_SHADER,
       },
@@ -994,6 +1032,33 @@ export function MoonGlobe({
     let pointerHeld = false;
     let hoverPoint: Cartesian2 | null = null;
     let pickFrameId = 0;
+    let lastGroundAt = 0;
+    let groundTimer = 0;
+    let touchInput = false;
+    // The map layers' readout: the ground point under the pointer, about ten times a second (the
+    // last move is always sent, after the pause).
+    const reportGround = () => {
+      groundTimer = 0;
+      const report = onHoverGroundRef.current;
+      if (!report || touchInput) return;
+      lastGroundAt = performance.now();
+      const ground =
+        hoverPoint && !pointerHeld ? camera.pickEllipsoid(hoverPoint, Ellipsoid.MOON) : undefined;
+      if (!ground) {
+        report(null);
+        return;
+      }
+      const spot = Ellipsoid.MOON.cartesianToCartographic(ground);
+      report({
+        lat: CesiumMath.toDegrees(spot.latitude),
+        lon: CesiumMath.toDegrees(spot.longitude),
+      });
+    };
+    const requestGround = () => {
+      if (!onHoverGroundRef.current || groundTimer !== 0) return;
+      const wait = Math.max(0, 100 - (performance.now() - lastGroundAt));
+      groundTimer = window.setTimeout(reportGround, wait);
+    };
     const updateHover = () => {
       pickFrameId = 0;
       const siteId = hoverPoint && !pointerHeld ? siteIdAt(hoverPoint) : null;
@@ -1020,10 +1085,12 @@ export function MoonGlobe({
     widget.screenSpaceEventHandler.setInputAction((event: { endPosition: Cartesian2 }) => {
       hoverPoint = Cartesian2.clone(event.endPosition, hoverPoint ?? undefined);
       requestHover();
+      requestGround();
     }, ScreenSpaceEventType.MOUSE_MOVE);
     // While the Moon is dragged, nothing decorative moves: the frame is marked, and CSS stops the
     // selection pulse until the pointer lets go.
-    const holdPointer = () => {
+    const holdPointer = (event: PointerEvent) => {
+      touchInput = event.pointerType === 'touch';
       pointerHeld = true;
       if (frameRef.current) frameRef.current.dataset.dragging = 'true';
       requestHover();
@@ -1136,6 +1203,7 @@ export function MoonGlobe({
       removePointFollow();
       cancelAnimationFrame(colourFadeId);
       cancelAnimationFrame(pickFrameId);
+      window.clearTimeout(groundTimer);
       removeFrameWatch();
       container.removeEventListener('pointerdown', holdPointer);
       window.removeEventListener('pointerup', releasePointer);
@@ -1191,14 +1259,15 @@ export function MoonGlobe({
     };
   }, [showGrid]);
 
-  // Site beacons: suitable in off-white with the rank inside, not suitable as a small grey dot.
+  // Site beacons: suitable in green with the rank inside, not suitable as a small red dot (the
+  // Sites list's verdict for the dates checked; the Timeline's bracket moves them live).
   // One entity per site for the map's life: a mission change swaps its image and name, and a
   // changed beacon fades back in.
   useEffect(() => {
     const widget = widgetRef.current;
     if (!widget) return;
     const ink = cssToken('--color-pin-text', '#061022');
-    const suitableFill = cssToken('--color-marker', '#d8d5ce');
+    const suitableFill = cssToken('--color-pin-pass', '#5fd49a');
     const anims = beaconAnimRef.current;
     const { camera } = widget;
     const badge = cssToken('--color-accent', '#ffb347');
@@ -1207,14 +1276,21 @@ export function MoonGlobe({
       const compared = comparedSiteIds.includes(site.id);
       const style: BeaconStyle = {
         compareBadge: compared ? badge : undefined,
-        fill: entry.rank === null ? cssToken('--color-pin-excluded', '#8a91a0') : suitableFill,
+        fill: entry.rank === null ? cssToken('--color-pin-fail', '#ff7b72') : suitableFill,
         ink,
       };
       const image = beaconSvgDataUri(style, entry.rank);
       const id = `${SITE_ENTITY_PREFIX}${site.id}`;
       const existing = widget.entities.getById(id);
       if (existing) {
-        if (updateBeacon(existing, image, hoverText(entry, compared), widget.clock.currentTime)) {
+        if (
+          updateBeacon(
+            existing,
+            image,
+            hoverText(entry, compared, missionWords),
+            widget.clock.currentTime,
+          )
+        ) {
           const anim = anims.get(site.id);
           if (anim) anim.appear = 0;
         }
@@ -1223,7 +1299,7 @@ export function MoonGlobe({
       const position = Cartesian3.fromDegrees(site.lon, site.lat, MARKER_HEIGHT_M);
       widget.entities.add({
         id,
-        name: hoverText(entry, compared),
+        name: hoverText(entry, compared, missionWords),
         position,
         billboard: {
           image,
@@ -1256,7 +1332,7 @@ export function MoonGlobe({
       });
     }
     animateBeaconsRef.current();
-  }, [rankedSites, comparedSiteIds]);
+  }, [rankedSites, comparedSiteIds, missionWords]);
 
   useEffect(() => {
     pickedRef.current = pickedPoint;
@@ -1324,39 +1400,117 @@ export function MoonGlobe({
     );
   }, [flyRequest]);
 
-  // The elevation or slope layer: the grid redrawn once on a longitude-latitude image covering the
-  // pole out to its edge (elevationGrid.layerPixels), as one image layer over the surface.
+  // The map layers (docs/LANDER_RULES.md, "Map layers: elevation and slope"): for each visible
+  // layer, its preview quarters first, then the full quarters and the 40 m patches, which replace the
+  // previews once all have loaded. Nothing loads until a layer is first switched on; switching it
+  // off hides its images. The first layer in the list is drawn lowest (elevation under slope), all
+  // above the basemap. The images never change with the time.
   useEffect(() => {
+    mapLayersRef.current = mapLayers;
     const widget = widgetRef.current;
-    if (!widget || !elevationLayer) return undefined;
-    const { grid, layer } = elevationLayer;
-    const width = 2048;
-    const height = 256;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) return undefined;
-    context.putImageData(
-      new ImageData(layerPixels(grid, layer, width, height), width, height),
-      0,
-      0,
-    );
-    const imagery = widget.imageryLayers.addImageryProvider(
-      new SingleTileImageryProvider({
-        url: canvas.toDataURL('image/png'),
-        rectangle: Rectangle.fromDegrees(-180, -90, 180, grid.manifest.maxLatDeg),
-        tileWidth: width,
-        tileHeight: height,
-        ellipsoid: Ellipsoid.MOON,
-      }),
-    );
-    widget.scene.requestRender();
-    return () => {
-      widget.imageryLayers.remove(imagery, true);
+    if (!widget) return;
+    const layers = widget.imageryLayers;
+    const states = layerImageryRef.current;
+    const apply = () => {
+      for (const display of mapLayersRef.current) {
+        const state = states.get(display.id);
+        if (!state) continue;
+        for (const imagery of [...state.preview, ...state.full]) {
+          imagery.show = display.visible;
+          imagery.alpha = display.opacity;
+          if (layers.contains(imagery)) layers.raiseToTop(imagery);
+        }
+      }
       widget.scene.requestRender();
     };
-  }, [elevationLayer]);
+    // Each image as its own imagery layer, drawn pixel for pixel (no blending of the team's
+    // colours). Images that fail are left out; the rest are kept.
+    const load = async (images: readonly LayerImageSpec[]) => {
+      const results = await Promise.allSettled(
+        images.map(async (image) => {
+          const provider = await SingleTileImageryProvider.fromUrl(image.url, {
+            rectangle: Rectangle.fromDegrees(image.west, image.south, image.east, image.north),
+            ellipsoid: Ellipsoid.MOON,
+          });
+          return new ImageryLayer(provider, {
+            magnificationFilter: TextureMagnificationFilter.NEAREST,
+            minificationFilter: TextureMinificationFilter.NEAREST,
+          });
+        }),
+      );
+      const loaded = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      );
+      return { loaded, failed: loaded.length < images.length };
+    };
+    for (const display of mapLayers) {
+      const existing = states.get(display.id);
+      if (!display.visible) {
+        // A layer whose images partly failed is cleared when switched off, so switching it on
+        // again loads it afresh.
+        if (existing?.failed) {
+          for (const imagery of [...existing.preview, ...existing.full]) {
+            layers.remove(imagery, true);
+          }
+          states.delete(display.id);
+        }
+        continue;
+      }
+      if (existing) continue;
+      const state = {
+        preview: [] as ImageryLayer[],
+        full: [] as ImageryLayer[],
+        failed: false,
+      };
+      states.set(display.id, state);
+      void (async () => {
+        const preview = await load(display.preview);
+        if (widget.isDestroyed()) return;
+        for (const imagery of preview.loaded) layers.add(imagery);
+        state.preview = preview.loaded;
+        apply();
+        // A narrow or low-memory device keeps the previews only.
+        const full = display.full.length > 0 ? await load(display.full) : null;
+        if (widget.isDestroyed()) return;
+        if (full) {
+          for (const imagery of full.loaded) layers.add(imagery);
+          state.full = full.loaded;
+          // The previews go once every full image is in; otherwise they fill the gaps.
+          if (!full.failed) {
+            for (const imagery of state.preview) layers.remove(imagery, true);
+            state.preview = [];
+          }
+        }
+        const failed = preview.failed || (full?.failed ?? false);
+        state.failed = failed;
+        const stillOn = mapLayersRef.current.some(
+          (entry) => entry.id === display.id && entry.visible,
+        );
+        if (failed && !stillOn) {
+          // Switched off while loading: clear it now, so switching it on again retries.
+          for (const imagery of [...state.preview, ...state.full]) layers.remove(imagery, true);
+          state.preview = [];
+          state.full = [];
+        }
+        if (state.preview.length === 0 && state.full.length === 0) {
+          // Nothing loaded: forget the layer, so switching it on again tries again.
+          states.delete(display.id);
+        }
+        if (failed) onLayerFailedRef.current?.(display.id);
+        apply();
+      })();
+    }
+    apply();
+  }, [mapLayers]);
+
+  // Where the Sun-and-relief shading stops: south of the layers' coverage while one is visible.
+  useEffect(() => {
+    const widget = widgetRef.current;
+    const material = widget?.scene.globe.material;
+    if (!widget || !material) return;
+    material.uniforms.unshadedBelowZ = layerShadeCutZ;
+    widget.scene.requestRender();
+  }, [layerShadeCutZ]);
 
   // The shared time moved (live tick, playback, an edit): re-point the Sun light and the sky.
   useEffect(() => {
@@ -1463,9 +1617,8 @@ export function MoonGlobe({
           onSouthPole={showSouthPole}
           showGrid={showGrid}
           onShowGridChange={onShowGridChange}
-          elevationLayer={elevationLayer?.layer ?? null}
-          elevationAvailable={elevationAvailable}
-          onElevationLayerChange={onElevationLayerChange}
+          onToggleLayers={onToggleLayers}
+          layersOpen={layersOpen}
           onPresent={onPresent}
         />
       </div>

@@ -49,6 +49,13 @@ export interface SlipQuestion {
   readonly to: SlipQuestionMonth | null;
 }
 
+/** One end of a date span ("12 Dec"): the day and year only when typed. */
+export interface SlipRangeDate {
+  readonly day: number | null;
+  readonly month: SlipMonth;
+  readonly year: number | null;
+}
+
 export interface SlipReading {
   /** The mission's name exactly as typed, or null. */
   readonly missionName: string | null;
@@ -60,6 +67,8 @@ export interface SlipReading {
     readonly month: SlipMonth;
     readonly year: number | null;
   } | null;
+  /** "Between 12 Dec and 25 Dec": a span of dates to plan for (the app checks and applies it). */
+  readonly range: { readonly from: SlipRangeDate; readonly to: SlipRangeDate } | null;
   readonly powerDays: number | null;
   readonly minSunDeg: number | null;
   readonly minEarthDeg: number | null;
@@ -75,6 +84,7 @@ export const SLIP_FIELDS = [
   'missionName',
   'shift',
   'date',
+  'range',
   'powerDays',
   'minSunDeg',
   'minEarthDeg',
@@ -126,6 +136,15 @@ function readDate(value: unknown): SlipReading['date'] | undefined {
   return { day, month, year };
 }
 
+function readRange(value: unknown): SlipReading['range'] | undefined {
+  if (value === null) return null;
+  if (!isRecord(value) || !hasExactly(value, ['from', 'to'])) return undefined;
+  const from = readDate(value.from);
+  const to = readDate(value.to);
+  if (!from || !to) return undefined;
+  return { from, to };
+}
+
 function readQuestionMonth(value: unknown): SlipQuestionMonth | null | undefined {
   if (value === null) return null;
   if (!isRecord(value) || !hasExactly(value, ['month', 'year'])) return undefined;
@@ -169,6 +188,7 @@ export function readSlipReading(value: unknown): SlipReading | null {
         : undefined;
   const shift = readShift(value.shift);
   const date = readDate(value.date);
+  const range = readRange(value.range);
   const powerDays = nullableNumber(value.powerDays);
   const minSunDeg = nullableNumber(value.minSunDeg);
   const minEarthDeg = nullableNumber(value.minEarthDeg);
@@ -185,6 +205,7 @@ export function readSlipReading(value: unknown): SlipReading | null {
     missionName === undefined ||
     shift === undefined ||
     date === undefined ||
+    range === undefined ||
     powerDays === undefined ||
     minSunDeg === undefined ||
     minEarthDeg === undefined ||
@@ -198,6 +219,7 @@ export function readSlipReading(value: unknown): SlipReading | null {
     missionName,
     shift,
     date,
+    range,
     powerDays,
     minSunDeg,
     minEarthDeg,

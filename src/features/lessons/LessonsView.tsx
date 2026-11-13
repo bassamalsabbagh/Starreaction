@@ -7,12 +7,17 @@ import styles from './LessonsView.module.css';
  * Lessons from past landings: real missions where sunlight, the Earth's position or the lunar
  * night decided how long a lander lasted. Every fact carries its source (docs/DATA_SOURCES.md).
  */
-export function LessonsView() {
+export function LessonsView({
+  onSeeInTool,
+}: {
+  /** "See it in the tool": that landing site, at its landing date. */
+  onSeeInTool?: (siteId: string) => void;
+}) {
   return (
     <PanelView title="Lessons from past landings">
       <p className={styles.intro}>
         Real landings where sunlight, the Earth or the lunar night decided how long a lander lasted.
-        These are real missions, unlike the demo sites.
+        These are real missions, and each fact links to its source.
       </p>
       <ol className={styles.list}>
         {LANDING_LESSONS.map((lesson) => (
@@ -31,12 +36,24 @@ export function LessonsView() {
               <span className={styles.lessonLabel}>The lesson</span> {lesson.lesson}
             </p>
             {lesson.note ? <p className={styles.note}>{lesson.note}</p> : null}
+            {lesson.siteId && onSeeInTool ? (
+              <button
+                type="button"
+                className={styles.seeInTool}
+                aria-label={`See it in the tool: ${lesson.name}`}
+                onClick={() => {
+                  if (lesson.siteId) onSeeInTool(lesson.siteId);
+                }}
+              >
+                See it in the tool
+              </button>
+            ) : null}
             <p className={styles.sources}>
               Sources:{' '}
               {lesson.sources.map((source, index) => (
                 <span key={source.url}>
                   {index > 0 ? ' · ' : null}
-                  <a href={source.url} target="_blank" rel="noreferrer">
+                  <a href={source.url} target="_blank" rel="noopener noreferrer">
                     {source.label}
                   </a>
                 </span>

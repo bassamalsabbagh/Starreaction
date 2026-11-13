@@ -80,6 +80,13 @@
   text-transform: uppercase;
 }
 
+/* A demo mission's tag (Demo Coral): its needs are made up for practice. */
+.demoTag {
+  composes: customTag;
+  border-color: color-mix(in srgb, var(--color-status-demo) 45%, transparent);
+  color: var(--color-status-demo);
+}
+
 /* "Add your own lander": a quiet outlined button; it opens the form in the same panel. */
 .add {
   display: inline-flex;

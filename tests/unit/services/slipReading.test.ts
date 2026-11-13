@@ -5,6 +5,7 @@ const EMPTY = {
   missionName: null,
   shift: null,
   date: null,
+  range: null,
   powerDays: null,
   minSunDeg: null,
   minEarthDeg: null,
@@ -20,6 +21,7 @@ describe('readSlipReading', () => {
       missionName: 'Mission B',
       shift: { shift: -2, unit: 'weeks' },
       date: null,
+      range: null,
       powerDays: 4.5,
       minSunDeg: 5,
       minEarthDeg: 0,
@@ -49,6 +51,36 @@ describe('readSlipReading', () => {
         question: { about: 'power', siteName: null, from: null, to: null },
       }),
     ).toBeNull();
+  });
+
+  it('reads a span of dates, day and year only when typed', () => {
+    const range = {
+      from: { day: 12, month: 'December', year: null },
+      to: { day: 25, month: 'December', year: 2026 },
+    };
+    expect(readSlipReading({ ...EMPTY, range })?.range).toEqual(range);
+    expect(
+      readSlipReading({
+        ...EMPTY,
+        range: { from: { day: null, month: 'March', year: null }, to: range.to },
+      })?.range?.from,
+    ).toEqual({ day: null, month: 'March', year: null });
+  });
+
+  it('refuses a malformed span', () => {
+    const to = { day: 25, month: 'December', year: null };
+    for (const range of [
+      { from: null, to },
+      { from: { day: 32, month: 'December', year: null }, to },
+      { from: { day: 1, month: 'Dec', year: null }, to },
+      { from: to, to, extra: 1 },
+      'between 12 and 25',
+    ]) {
+      expect(readSlipReading({ ...EMPTY, range })).toBeNull();
+    }
+    const { range: _range, ...noRange } = EMPTY;
+    expect(_range).toBeNull();
+    expect(readSlipReading(noRange)).toBeNull();
   });
 
   it('lists the same fields as the reply type', () => {

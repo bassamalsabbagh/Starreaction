@@ -29,10 +29,57 @@ export interface TerrainPatch {
 export interface HorizonProfile {
   /** Terrain horizon elevation in degrees for each whole azimuth 0–359 (clockwise from north). */
   elevations: Float32Array;
+  /**
+   * Per whole azimuth 0–359: 1 when that direction's ray reached the edge of the elevation data
+   * before its full distance (terrain beyond it is not counted), else 0. Absent when not known.
+   */
+  edgeCut?: Uint8Array;
   /** How far from the site the terrain is known, metres. */
   radiusM: number;
   spacingM: number;
   source: string;
+}
+
+/**
+ * A horizon as the offline generator writes it (scripts/data/horizon_profile.py): `elevations`
+ * and the optional `edgeCut` as plain number arrays or typed arrays. The app turns it into a
+ * HorizonProfile (src/data/terrainPatches.ts).
+ */
+export interface GeneratedHorizon {
+  elevations: ArrayLike<number>;
+  edgeCut?: ArrayLike<number>;
+  radiusM: number;
+  spacingM: number;
+  source: string;
+}
+
+/** A run of neighbouring whole azimuths, clockwise from `start`, `length` degrees long. */
+export interface AzimuthRun {
+  start: number;
+  length: number;
+}
+
+/**
+ * The directions whose horizon was cut off at the edge of the elevation data, as runs of
+ * neighbouring azimuths (a run may cross north: 350° for 20° covers 350–9°). Empty without
+ * `edgeCut`.
+ */
+export function edgeCutRuns(profile: Pick<HorizonProfile, 'edgeCut'>): AzimuthRun[] {
+  const cut = profile.edgeCut;
+  if (!cut) return [];
+  const isCut = (azimuth: number) => (cut[((azimuth % 360) + 360) % 360] ?? 0) !== 0;
+  // Start the scan just after a direction that is not cut, so no run is split across north.
+  const clear = Array.from({ length: 360 }, (_, azimuth) => azimuth).find((a) => !isCut(a));
+  if (clear === undefined) return [{ start: 0, length: 360 }];
+  const runs: AzimuthRun[] = [];
+  for (let step = 1; step <= 360; step += 1) {
+    const azimuth = (clear + step) % 360;
+    if (!isCut(azimuth)) continue;
+    const last = runs[runs.length - 1];
+    if (last && (last.start + last.length) % 360 === azimuth) last.length += 1;
+    else runs.push({ start: azimuth, length: 1 });
+  }
+  return runs.sort((a, b) => a.start - b.start);
 }
 
 export type TerrainIllumination =

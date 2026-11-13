@@ -3,15 +3,15 @@
 // real MapControls render, and two buttons drive the imagery status. The real globe needs manual
 // browser verification.
 import { useEffect, useState, type RefObject } from 'react';
-import type { RankedDemoSite } from '../../src/data/demoData';
+import type { RankedSite } from '../../src/data/demoData';
 import { MapControls } from '../../src/features/lunar-map/MapControls';
 import type { MapController, ViewInsets } from '../../src/features/lunar-map/cameraControls';
-import type { ElevationLayer } from '../../src/utils/elevationGrid';
+import type { LayerDisplay } from '../../src/features/lunar-map/mapLayerState';
 import type { ImageryStatus } from '../../src/features/lunar-map/mapLabels';
 import type { FlyRequest } from '../../src/features/lunar-map/MoonGlobe';
 
 interface MoonGlobeProps {
-  rankedSites: readonly RankedDemoSite[];
+  rankedSites: readonly RankedSite[];
   selectedSiteId: string | null;
   hoveredSiteId: string | null;
   onHoverSite: (siteId: string | null) => void;
@@ -30,9 +30,10 @@ interface MoonGlobeProps {
   controllerRef?: RefObject<MapController | null>;
   controlsHidden?: boolean;
   onPresent?: () => void;
-  elevationLayer?: { layer: ElevationLayer } | null;
-  elevationAvailable?: boolean;
-  onElevationLayerChange?: (layer: ElevationLayer | null) => void;
+  mapLayers?: readonly LayerDisplay[];
+  onToggleLayers?: () => void;
+  layersOpen?: boolean;
+  onHoverGround?: (point: { lat: number; lon: number } | null) => void;
 }
 
 export function MoonGlobe({
@@ -50,9 +51,10 @@ export function MoonGlobe({
   controllerRef,
   controlsHidden = false,
   onPresent,
-  elevationLayer = null,
-  elevationAvailable = false,
-  onElevationLayerChange,
+  mapLayers = [],
+  onToggleLayers,
+  layersOpen = false,
+  onHoverGround,
 }: MoonGlobeProps) {
   const noop = () => undefined;
   // The camera stand-in: counts whole-Moon calls and remembers the view it was asked to restore.
@@ -84,6 +86,12 @@ export function MoonGlobe({
         flyRequest?.point ? `${flyRequest.point.lat},${flyRequest.point.lon}` : 'none'
       }
       data-picked={pickedPoint ? `${pickedPoint.lat},${pickedPoint.lon}` : 'none'}
+      data-layers={
+        mapLayers
+          .filter((layer) => layer.visible)
+          .map((layer) => `${layer.id}:${layer.opacity}`)
+          .join(' ') || 'none'
+      }
     >
       {/* Presentation mode hides the column, as the real map does. */}
       {controlsHidden ? null : (
@@ -95,9 +103,8 @@ export function MoonGlobe({
           showGrid={showGrid}
           onShowGridChange={onShowGridChange}
           onPresent={onPresent}
-          elevationLayer={elevationLayer?.layer ?? null}
-          elevationAvailable={elevationAvailable}
-          onElevationLayerChange={onElevationLayerChange}
+          onToggleLayers={onToggleLayers}
+          layersOpen={layersOpen}
         />
       )}
       {showGrid ? <span data-testid="graticule-line" /> : null}
@@ -116,9 +123,13 @@ export function MoonGlobe({
           {site.name}
         </button>
       ))}
-      {/* A click on bare ground, at a fixed made-up spot away from every demo site. */}
+      {/* A click on bare ground, at a fixed made-up spot away from every landing site. */}
       <button type="button" onClick={() => onPickPoint?.({ lat: 20.25, lon: 40.5 })}>
         simulate ground click
+      </button>
+      {/* The pointer over IM-1's site, for the map layers' readout (as the real globe reports). */}
+      <button type="button" onClick={() => onHoverGround?.({ lat: -80.13, lon: 1.44 })}>
+        simulate hover over IM-1
       </button>
       <button type="button" onClick={() => onImageryStatusChange('loaded')}>
         simulate tiles loaded

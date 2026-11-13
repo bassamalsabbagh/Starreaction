@@ -1,5 +1,6 @@
 /**
- * Lessons from past landings: REAL missions, unlike the demo sites. Every fact here comes from a
+ * Lessons from past landings: REAL missions (four of them are also the app's landing sites, linked
+ * by `siteId` to data/sites.json). Every fact here comes from a
  * source in docs/DATA_SOURCES.md (SRC-023 to SRC-036), opened on 2026-11-11, and says only what
  * that source states; where sources disagree, both values are kept (`note`). "The lesson" is the
  * team's planning takeaway, not a claim from the source.
@@ -30,11 +31,14 @@ export interface LandingLesson {
   readonly note?: string;
   /** docs/DATA_SOURCES.md ids, with the label and URL shown in the app. */
   readonly sources: readonly { id: string; label: string; url: string }[];
+  /** The landing site in the tool (data/sites.json id), for "See it in the tool". */
+  readonly siteId?: string;
 }
 
 export const LANDING_LESSONS: readonly LandingLesson[] = [
   {
     id: 'chandrayaan-3',
+    siteId: 'ch3',
     name: 'Chandrayaan-3 (Vikram)',
     who: 'ISRO',
     when: '23 August 2023',
@@ -94,6 +98,7 @@ export const LANDING_LESSONS: readonly LandingLesson[] = [
   },
   {
     id: 'im-1',
+    siteId: 'im1',
     name: 'IM-1 (Odysseus)',
     who: 'Intuitive Machines, NASA CLPS',
     when: '22 February 2024',
@@ -129,6 +134,7 @@ export const LANDING_LESSONS: readonly LandingLesson[] = [
   },
   {
     id: 'blue-ghost-1',
+    siteId: 'bg1',
     name: 'Blue Ghost Mission 1',
     who: 'Firefly Aerospace, NASA CLPS',
     when: '2 March 2025',
@@ -153,6 +159,7 @@ export const LANDING_LESSONS: readonly LandingLesson[] = [
   },
   {
     id: 'im-2',
+    siteId: 'im2',
     name: 'IM-2 (Athena)',
     who: 'Intuitive Machines, NASA CLPS',
     when: '6 March 2025',

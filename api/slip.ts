@@ -64,6 +64,18 @@ const questionMonth = (description: string) => ({
   description,
 });
 
+/** One end of a date span: day and year only when written. */
+const rangeDate = {
+  type: 'object',
+  properties: {
+    day: { type: ['integer', 'null'], minimum: 1, maximum: 31 },
+    month: { type: 'string', enum: MONTHS },
+    year: { type: ['integer', 'null'] },
+  },
+  required: ['day', 'month', 'year'],
+  additionalProperties: false,
+};
+
 /** The reply's JSON schema: the only shape the model may answer in (Gemini structured output). */
 export const SLIP_SCHEMA = {
   type: 'object',
@@ -106,6 +118,19 @@ export const SLIP_SCHEMA = {
       ],
       description: 'When the note names a calendar date or month. Year null unless written.',
     },
+    range: {
+      anyOf: [
+        {
+          type: 'object',
+          properties: { from: rangeDate, to: rangeDate },
+          required: ['from', 'to'],
+          additionalProperties: false,
+        },
+        { type: 'null' },
+      ],
+      description:
+        'When the note gives a span of dates to plan for ("between 12 Dec and 25 Dec"). Days and years as written, null when not written.',
+    },
     powerDays: nullable('number', 'Days of power the mission needs, as written.'),
     minSunDeg: nullable('number', 'Lowest Sun height in degrees for power, as written.'),
     minEarthDeg: nullable('number', 'Lowest Earth height in degrees for contact, as written.'),
@@ -142,6 +167,7 @@ export const SLIP_SCHEMA = {
     'missionName',
     'shift',
     'date',
+    'range',
     'powerDays',
     'minSunDeg',
     'minEarthDeg',
@@ -158,6 +184,7 @@ const INSTRUCTIONS = `You read one short note from a lunar mission planner about
 - missionName: the mission's name exactly as written in the note, or null if none is named.
 - shift: when the note says the launch moved by an amount of time ("slipped 3 weeks", "two months later", "a week earlier"). shift is the amount as written (negative when earlier); unit is days, weeks, months or years. Do not turn it into a date.
 - date: when the note names a calendar date or month ("12 March 2027", "in March"). day and year as written, or null when not written. Do not work out a year that is not written.
+- range: when the note gives a span of dates to plan for or check ("between 12 Dec and 25 Dec", "from 3 March to 20 March 2027"): from and to, each with the day, month and year as written (day or year null when not written). Use range, not date, for a span. Do not work out a year that is not written.
 - powerDays: days of power the mission needs. minSunDeg: the lowest Sun height in degrees above the horizon that gives it power. minEarthDeg: the lowest Earth height in degrees for direct contact. relay: true if the note says the mission has or now uses a relay, false if it says it has none, otherwise null.
 - question: when the note asks one of these: when to land, the best date, time, month or landing window ("about": "when"); the best site ("about": "where"); how many days of sunlight a site gets ("about": "sunlight"); which site has the most Earth time or sees the Earth most ("about": "earth"); whether a site passes or suits a mission ("about": "passes"). siteName: a landing site named in the question, exactly as written, or null. from and to: the months the question names ("between October and November": from October, to November; "in March": from March, to null), each with its year only when the year is written. Never answer the question and never suggest a date or a site. Any other kind of question goes in unclear.
 - unclear: short quotes, copied word for word from the note, of anything about the mission, its needs or its date that does not fit a field. Empty when everything was read.

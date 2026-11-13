@@ -222,6 +222,22 @@
   line-height: 1.3;
 }
 
+/* The range's hours of Sun, Earth and both: measured values, quieter than the needs line. */
+.hours {
+  color: var(--color-text-faint);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+/* The dates picked in the Mission view, when they replace the time bar's 29.5 days. */
+.rangeNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
 .row:active,
 .unsuitableRow:active {
   background: color-mix(in srgb, var(--color-text) 6%, var(--color-bg));

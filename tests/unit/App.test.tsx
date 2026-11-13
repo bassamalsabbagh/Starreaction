@@ -5,20 +5,23 @@ import { App } from '../../src/app/App';
 import { DOCUMENT_TITLE, NON_ENDORSEMENT } from '../../src/app/appInfo';
 import {
   DEMO_LABEL,
-  DEMO_NOTICE,
-  DEMO_SITES,
   findDemoMission,
   formatDays,
-  rankDemoSites,
+  rankSites,
   type SiteOrder,
 } from '../../src/data/demoData';
 import { LANDING_LESSONS } from '../../src/data/landingLessons';
 import { checkPoint } from '../../src/data/pointCheck';
 import { slipSummary } from '../../src/features/missions/slipSummary';
+import { ENGINE_LABEL } from '../../src/features/lunar-map/horizonsPositions';
+import { viewInHorizonsUrl } from '../../src/services/horizonsQuery';
+import { SITES } from '../../src/services/sites';
+import { SOUTH_POLE, formatKm, haversineKm } from '../../src/utils/distance';
 import { TOUR_STEPS } from '../../src/features/tour/tourSteps';
 import { describeElevation, type LatLon } from '../../src/utils/lunarSky';
-import { bodyNow, type SkyBody } from '../../src/utils/riseSet';
+import { bodyNow, forecastText, type SkyBody } from '../../src/utils/riseSet';
 import { hourlySky, sampledSpan, siteSky } from '../../src/utils/skyVisibility';
+import type { TimeRange } from '../../src/utils/time';
 import { UI_PREFS_KEY, loadUiPrefs } from '../../src/utils/uiPrefs';
 import {
   DAY_MS,
@@ -27,13 +30,15 @@ import {
   dayTicks,
   formatClock,
   formatDayMonth,
-  formatDuration,
   formatRangeUtc,
   formatWindowLength,
   rangeAround,
 } from '../../src/utils/time';
 
 vi.mock('../../src/features/lunar-map/MoonGlobe', () => import('../mocks/MoonGlobe'));
+// The "Launch slipped?" assistant is a future plan, off by default; these tests switch it on
+// (VITE_SLIP_ASSISTANT=on) to keep it working. AppSlipOff.test.tsx covers the default.
+vi.mock('../../src/app/featureFlags', () => ({ SLIP_ASSISTANT_ENABLED: true }));
 // Load the map's stand-in once up front (see tests/unit/AppLoading.test.tsx).
 beforeAll(async () => {
   await import('../mocks/MoonGlobe');
@@ -44,6 +49,13 @@ vi.mock('../../src/data/terrainPatches', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/data/terrainPatches')>()),
   terrainProfileFor: () => null,
 }));
+// And our engine for the Sun and Earth, as the expected values below are worked out: the JPL
+// Horizons files are not loaded here (their use has its own tests: horizonsPositions, riseSet,
+// useHorizonsSeries, slipQuestion). One empty map, so the app sees the same one every render.
+vi.mock('../../src/features/lunar-map/useHorizonsSeries', () => {
+  const none = { series: new Map(), settled: false };
+  return { useHorizonsSeries: () => none };
+});
 
 const NOW = '2026-11-15T02:00:00Z';
 
@@ -74,15 +86,26 @@ function mission(id = 'demo-mission-a') {
 const RANGE = rangeAround(dayCentre(Date.parse(NOW)));
 
 /** The sites as the app lists them now (real Sun and Earth), for a mission and order. */
-function expectedSites(missionId = 'demo-mission-a', order: SiteOrder = 'window') {
+function expectedSites(
+  missionId = 'demo-mission-a',
+  order: SiteOrder = 'window',
+  range: TimeRange = RANGE,
+) {
   const chosen = mission(missionId);
-  const samples = hourlySky(sampledSpan(RANGE));
-  const sky = new Map(DEMO_SITES.map((site) => [site.id, siteSky(samples, site, chosen, RANGE)]));
-  return rankDemoSites(DEMO_SITES, chosen, sky, RANGE, order);
+  const samples = hourlySky(sampledSpan(range));
+  const sky = new Map(SITES.map((site) => [site.id, siteSky(samples, site, chosen, range)]));
+  return rankSites(SITES, chosen, sky, range, order);
 }
 
-function topSite() {
-  const first = expectedSites()[0];
+/** "Sun 333 h · Earth 708 h · both 333 h", as a Sites row shows a site's hours. */
+function hoursText(entry: ReturnType<typeof expectedSites>[number]) {
+  const { sky } = entry.assessment;
+  const h = (value: number) => `${value.toLocaleString('en-US')} h`;
+  return `Sun ${h(sky.sunHours)} · Earth ${h(sky.earthHours)} · both ${h(sky.bothHours)}`;
+}
+
+function topSite(missionId = 'demo-mission-a') {
+  const first = expectedSites(missionId)[0];
   if (!first || first.rank === null) throw new Error('no suitable site now');
   return first;
 }
@@ -95,11 +118,19 @@ function unsuitableCount(missionId = 'demo-mission-a') {
 function skyChip(place: LatLon, body: SkyBody) {
   const now = bodyNow(place, body, Date.parse(NOW));
   const name = body === 'sun' ? 'Sun' : 'Earth';
-  const next = now.next
-    ? ` · ${now.next.kind === 'set' ? 'sets' : 'rises'} in ${formatDuration(now.next.at - Date.parse(NOW))}`
-    : '';
+  const next = now.next ? ` · ${forecastText(body, now.next, Date.parse(NOW))}` : '';
   return `${describeElevation(name, now.elevationDeg)}${next}`;
 }
+
+/** A text matcher: exactly one of the real sites' names. */
+const isSiteName = (text: string) => SITES.some((site) => site.name === text);
+
+/** The Power check's night-load slider (heater plus electronics; never "Heater"). */
+const NIGHT_LOAD = /^Night load \(heater \+ electronics\)/;
+
+/** What the Comms check says under it, once: Earth in view is geometry, not a working link. */
+const COMMS_NOTE =
+  'Earth in view means a direct link is geometrically possible; it does not guarantee the radio link works.';
 
 // ---------- Finding things on screen ----------
 
@@ -150,6 +181,14 @@ function missionView() {
 
 function missionSelect() {
   return within(missionView()).getByRole('combobox', { name: 'Mission' });
+}
+
+/**
+ * Picks a demo mission. Mission C needs the Sun 10° up, which it never reaches at IM-2 Athena
+ * (84.8° S): the real site that is not suitable in these tests (all four suit Mission A).
+ */
+function pickMission(id: string) {
+  fireEvent.change(missionSelect(), { target: { value: id } });
 }
 
 /** Sites (the default view): back from a card, or from the rail. */
@@ -333,7 +372,7 @@ describe('App layout', () => {
     expect(screen.queryByRole('navigation', { name: 'Menu' })).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Time bar' })).toBeInTheDocument();
     expect(screen.getByTestId('present-label')).toHaveTextContent(
-      `${topSite().site.name}Power and comms OK this monthDEMO`,
+      `${topSite().site.name}Power and comms OK this monthDEMO mission`,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Exit presentation' }));
     expect(screen.getByRole('banner')).toBeInTheDocument();
@@ -402,12 +441,12 @@ describe('The left panel by screen width', () => {
 });
 
 describe('Demo labelling and the About panel', () => {
-  it('labels the data as demo with one pill in the top bar, explained on hover and focus', () => {
+  it('has no "Data: Demo" pill; the mission picker says the needs are made up, the sites real', () => {
     render(<App />);
-    const pill = screen.getByRole('button', { name: 'Data: Demo' });
-    expect(pill).toHaveAccessibleDescription(DEMO_NOTICE);
-    expect(DEMO_NOTICE).toContain('made up for practice');
-    expect(DEMO_NOTICE).toContain(NON_ENDORSEMENT);
+    expect(screen.queryByRole('button', { name: /Data: Demo/ })).toBeNull();
+    const view = missionView();
+    expect(view).toHaveTextContent('DEMO These needs are made up for practice.');
+    expect(view).toHaveTextContent('The sites are real landings');
   });
 
   it('opens About from the rail; Escape closes it and gives focus back', () => {
@@ -419,24 +458,28 @@ describe('Demo labelling and the About panel', () => {
     expect(within(dialog).getByRole('tab', { name: 'About' })).toHaveFocus();
     expect(dialog).toHaveTextContent('NASA Space Apps 2026 - Amman');
     expect(dialog).toHaveTextContent('sunlight for power and the Earth in view');
+    expect(dialog).toHaveTextContent('the sites are real landings');
+    expect(dialog).toHaveTextContent(NON_ENDORSEMENT);
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(info).toHaveFocus();
   });
 
-  it('opens Data and credits from the pill, with the imagery credit', () => {
+  it('lists the credits in About: the imagery, the demo missions and the real landing sites', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Data: Demo' }));
+    fireEvent.click(railItem('About'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Data and credits' }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByRole('tab', { name: 'Data and credits' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
     expect(within(dialog).getByText('Imagery: NASA/JPL Moon Trek')).toBeVisible();
     expect(dialog).toHaveTextContent(DEMO_LABEL);
+    expect(dialog).toHaveTextContent('Demo Missions A, B and C are made up for practice');
+    expect(dialog).toHaveTextContent(
+      'Real landings: IM-1 Odysseus, IM-2 Athena, Blue Ghost Mission 1 and Chandrayaan-3 Vikram',
+    );
+    expect(dialog).not.toHaveTextContent(/demo sites|sites are made up/i);
   });
 
-  it('explains the power and comms checks, and that only the Sun and Earth are real', () => {
+  it('explains the power and comms checks, and that only the mission needs are made up', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'About' }));
     fireEvent.click(screen.getByRole('tab', { name: 'How it works' }));
@@ -445,9 +488,14 @@ describe('Demo labelling and the About panel', () => {
       within(panel)
         .getAllByRole('listitem')
         .map((item) => item.textContent?.split(':')[0]),
-    ).toEqual(['Power', 'Comms']);
+    ).toEqual(['Power', 'Comms', 'Usable window']);
+    expect(panel).toHaveTextContent('the dates you pick in the Mission view');
+    expect(panel).toHaveTextContent('hours of Sun, of Earth or of both');
+    expect(panel).toHaveTextContent('JPL Horizons at the four landing sites');
+    expect(panel).toHaveTextContent('our engine (astronomy-engine) for clicked points');
     expect(panel).toHaveTextContent('The Sun and Earth positions are real');
-    expect(panel).toHaveTextContent('The sites and the mission needs are made up');
+    expect(panel).toHaveTextContent('the sites are real landings');
+    expect(panel).toHaveTextContent("The demo missions' needs are made up for practice");
     expect(panel).not.toHaveTextContent(/score out of 100/);
   });
 
@@ -459,7 +507,10 @@ describe('Demo labelling and the About panel', () => {
     expect(screen.getByRole('tab', { name: 'Roadmap' })).toHaveFocus();
     const items = within(screen.getByRole('tabpanel')).getAllByRole('listitem');
     expect(items[1]).toHaveTextContent(/^Done\s*Time to sunset and Earthset/);
-    expect(items[4]).toHaveTextContent(/^Done\s*Launch slipped\? Describe the change/);
+    expect(items[4]).toHaveTextContent(
+      /^Planned\s*Launch slipped\? Describe the change.*future plan/,
+    );
+    expect(items[5]).toHaveTextContent(/^Done\s*Real landing sites/);
     expect(items[6]).toHaveTextContent(/^Planned\s*Terrain horizons at the south pole/);
   });
 
@@ -474,7 +525,8 @@ describe('Demo labelling and the About panel', () => {
   it('says close-ups fall back to the global map when the preview tiles fail', async () => {
     await renderApp();
     fireEvent.click(screen.getByRole('button', { name: 'simulate tiles failed' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Data: Demo' }));
+    fireEvent.click(railItem('About'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Data and credits' }));
     expect(within(screen.getByRole('dialog')).getByRole('status')).toHaveTextContent(
       'close-ups use the global 8K map',
     );
@@ -515,9 +567,7 @@ describe('Sites', () => {
     render(<App />);
     const expected = expectedSites();
     const suitable = expected.filter((entry) => entry.rank !== null);
-    expect(rankedRows().map((row) => row.textContent?.includes('Demo Site'))).toHaveLength(
-      suitable.length,
-    );
+    expect(rankedRows()).toHaveLength(suitable.length);
     const top = topSite();
     const first = rankedRows()[0];
     expect(first).toHaveAccessibleName(new RegExp(`^Rank 1: ${top.site.name}, usable this month `));
@@ -530,7 +580,10 @@ describe('Sites', () => {
     expect(first).toHaveTextContent(formatDays(top.assessment.usableDays).replace(' days', ' d'));
     expect(first).toHaveTextContent(/This month Sun up \d+% · Earth up \d+%/);
     expect(plan()).toHaveTextContent('Demo Mission A');
-    expect(plan()).toHaveTextContent('DEMO sites');
+    expect(plan()).toHaveTextContent(
+      `${suitable.length} of ${SITES.length} landing sites suitable`,
+    );
+    expect(plan()).not.toHaveTextContent(/DEMO site/i);
   });
 
   it('shows how much of the mission needs each site meets, in the list and Site details', () => {
@@ -539,18 +592,20 @@ describe('Sites', () => {
     const first = rankedRows()[0];
     const ratio = Math.floor((top.assessment.usableDays / mission().daysNeeded) * 10 + 1e-9) / 10;
     expect(first).toHaveTextContent(`${ratio}× what it needs`);
-    fireEvent.click(section(plan(), `Not suitable (${unsuitableCount()})`));
-    const unsuitable = within(plan())
-      .getAllByRole('button', { pressed: false })
-      .filter((button) => button.textContent?.includes('Not suitable for this mission'));
-    for (const row of unsuitable)
-      expect(row).toHaveTextContent(/\d+% of needs met · [\d.]+ d short/);
     const month = within(details()).getByRole('group', { name: 'This month' });
     expect(month).toHaveTextContent(`Mission needs met`);
     expect(month).toHaveTextContent(`× what it needs`);
+    pickMission('demo-mission-c');
+    fireEvent.click(section(plan(), `Not suitable (${unsuitableCount('demo-mission-c')})`));
+    const unsuitable = within(plan())
+      .getAllByRole('button', { pressed: false })
+      .filter((button) => button.textContent?.includes('Not suitable for this mission'));
+    expect(unsuitable.length).toBeGreaterThan(0);
+    for (const row of unsuitable)
+      expect(row).toHaveTextContent(/\d+% of needs met · [\d.]+ d short/);
   });
 
-  it('reorders by sunlight, Earth time or name', () => {
+  it('reorders by hours of Sun, of Earth, of both, or name', () => {
     render(<App />);
     const order = within(plan()).getByRole('group', { name: 'Order sites by' });
     expect(within(order).getByRole('button', { name: 'Longest window' })).toHaveAttribute(
@@ -564,30 +619,59 @@ describe('Sites', () => {
     );
     const byName = expectedSites('demo-mission-a', 'name').filter((entry) => entry.rank !== null);
     expect(rankedRows()[0]).toHaveTextContent(byName[0]?.site.name ?? 'missing');
-    fireEvent.click(within(order).getByRole('button', { name: 'Most Earth time' }));
-    expect(rankedRows()[0]).toHaveAccessibleName(/Earth up \d+%, [\d.]+× what it needs$/);
+    expect(
+      within(order)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual([
+      'Longest window',
+      'Most hours of Sun',
+      'Most hours of Earth',
+      'Most hours of both',
+      'Name',
+    ]);
+    fireEvent.click(within(order).getByRole('button', { name: 'Most hours of Earth' }));
+    const byEarth = expectedSites('demo-mission-a', 'earthHours').filter(
+      (entry) => entry.rank !== null,
+    );
+    expect(rankedRows()[0]).toHaveAccessibleName(
+      new RegExp(`^Rank 1: ${byEarth[0]?.site.name ?? 'missing'}, of Earth [\\d,]+ h, `),
+    );
+    fireEvent.click(within(order).getByRole('button', { name: 'Most hours of both' }));
+    const byBoth = expectedSites('demo-mission-a', 'bothHours').filter(
+      (entry) => entry.rank !== null,
+    );
+    expect(rankedRows()[0]).toHaveTextContent(byBoth[0]?.site.name ?? 'missing');
+  });
+
+  it('shows each site’s hours of Sun, of Earth and of both in the range', () => {
+    render(<App />);
+    const top = topSite();
+    expect(rankedRows()[0]).toHaveTextContent(hoursText(top));
   });
 
   it('keeps unsuitable sites folded, each with its reasons', () => {
     render(<App />);
-    const count = unsuitableCount();
+    pickMission('demo-mission-c');
+    const count = unsuitableCount('demo-mission-c');
     const toggle = section(plan(), `Not suitable (${count})`);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(toggle);
-    // Golf (160° E) is on the far side: the Earth never rises there, and Mission A has no relay.
-    const golf = siteRow('Demo Site Golf');
-    expect(golf).toHaveTextContent('Not suitable for this mission');
-    expect(golf).toHaveTextContent('No line of sight to Earth');
+    // IM-2 Athena (84.8° S): the Sun never climbs to Mission C's 10°.
+    const athena = siteRow('IM-2 Athena');
+    expect(athena).toHaveTextContent('Not suitable for this mission');
+    expect(athena).toHaveTextContent('Not enough sunlight for its power');
   });
 
   it('opens Not suitable when an unsuitable site is chosen on the map', async () => {
     await renderApp();
-    fireEvent.click(await mapMarker('Demo Site Golf'));
-    expect(section(plan(), `Not suitable (${unsuitableCount()})`)).toHaveAttribute(
+    pickMission('demo-mission-c');
+    fireEvent.click(await mapMarker('IM-2 Athena'));
+    expect(section(plan(), `Not suitable (${unsuitableCount('demo-mission-c')})`)).toHaveAttribute(
       'aria-expanded',
       'true',
     );
-    expect(siteRow('Demo Site Golf')).toHaveAttribute('aria-pressed', 'true');
+    expect(siteRow('IM-2 Athena')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('goes to typed coordinates: the point card opens and the map flies there', async () => {
@@ -629,23 +713,59 @@ describe('Site card', () => {
     const card = details();
     expect(within(card).getByRole('heading', { level: 3, name: top.site.name })).toBeVisible();
     expect(card).toHaveTextContent('#1');
-    expect(card).toHaveTextContent('DEMO site');
+    expect(card).not.toHaveTextContent('DEMO site');
+    expect(card).toHaveTextContent(
+      top.site.region ? `Landing site · ${top.site.region}` : 'Landing site',
+    );
     expect(card).toHaveTextContent('Power and comms OK for Demo Mission A');
     expect(card).not.toHaveTextContent(/\/100|Great|Poor/);
   });
 
-  it('shows the Sun and Earth now, with the time left before each sets or rises', () => {
+  it('shows the landing: why, coordinates, date, and both outcomes as separate fields', () => {
+    render(<App />);
+    const { site } = topSite();
+    const landing = within(details()).getByRole('group', { name: 'The landing' });
+    expect(landing).toHaveTextContent(site.why);
+    expect(landing).toHaveTextContent('Coordinates');
+    expect(landing).toHaveTextContent('Landed');
+    expect(landing).toHaveTextContent(`Landing outcome${site.landingOutcome}`);
+    expect(landing).toHaveTextContent(`Mission outcome${site.missionOutcome}`);
+  });
+
+  it('links each site’s coordinates and outcomes to their sources, with any note on the coordinates', () => {
+    render(<App />);
+    for (const site of SITES) {
+      fireEvent.click(siteRow(site.name));
+      const landing = within(details()).getByRole('group', { name: 'The landing' });
+      const sources = [
+        site.coordSource,
+        site.landingDateSource,
+        site.landingOutcomeSource,
+        site.missionOutcomeSource,
+      ];
+      const todo = sources.filter((source) => /^TODO\b/i.test(source)).length;
+      expect(within(landing).queryAllByRole('link', { name: /^Source of the / })).toHaveLength(
+        sources.length - todo,
+      );
+      expect(within(landing).queryAllByText('source TODO')).toHaveLength(todo);
+      if (site.coordNote) expect(landing).toHaveTextContent(site.coordNote);
+    }
+  });
+
+  it('shows the Sun and Earth now, with a forecast of when each sets or rises', () => {
     render(<App />);
     const top = topSite();
     const now = within(details()).getByRole('group', { name: 'The Sun and Earth now' });
+    let forecasts = 0;
     for (const body of ['sun', 'earth'] as const) {
       const state = bodyNow(top.site, body, Date.parse(NOW));
       if (state.next) {
-        expect(now).toHaveTextContent(
-          `${state.next.kind === 'set' ? 'sets' : 'rises'} in ${formatDuration(state.next.at - Date.parse(NOW))}`,
-        );
+        forecasts += 1;
+        expect(now).toHaveTextContent(forecastText(body, state.next, Date.parse(NOW)));
       }
     }
+    expect(forecasts).toBeGreaterThan(0);
+    expect(now).toHaveTextContent(/Forecast: (dark|Sun rises|Earth sets|Earth rises) in \d+ [dhm]/);
   });
 
   it('draws the horizon view, the best window, the month and the checks', () => {
@@ -656,7 +776,7 @@ describe('Site card', () => {
       name: /The Sun and Earth over the horizon this month/,
     });
     expect(chart).toBeInTheDocument();
-    expect(card).toHaveTextContent('Flat horizon: no terrain data loaded yet');
+    expect(card).toHaveTextContent('Flat horizon: no terrain data for this site');
     const window = currentOrNextWindow(top.assessment.sky.windows, Date.parse(NOW));
     if (!window) throw new Error('no window');
     const bar = within(card).getByTestId('window-bar');
@@ -674,6 +794,9 @@ describe('Site card', () => {
       expect.stringMatching(/^CommsOK/),
       expect.stringMatching(/^Usable windowOK.*Sun and Earth both up/),
     ]);
+    // One line under Comms, and only there.
+    expect(within(card).getAllByText(COMMS_NOTE)).toHaveLength(1);
+    expect(within(checks).getAllByRole('listitem')[1]).toHaveTextContent(COMMS_NOTE);
   });
 
   it("shows Miral's Power check: information only, with teaching sliders", () => {
@@ -685,13 +808,21 @@ describe('Site card', () => {
     const check = within(card).getByTestId('power-check');
     expect(check).toHaveTextContent('Miral’s');
     expect(check).toHaveTextContent('It doesn’t change the checks.');
+    // The results show at once; the sliders wait, folded, under "Power details".
+    expect(within(check).getByTestId('power-verdict')).toBeInTheDocument();
+    expect(within(check).getByText('Panel power now')).toBeInTheDocument();
+    const detailsToggle = section(check, /^Power details/);
+    expect(detailsToggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(detailsToggle);
     expect(check).toHaveTextContent('Teaching defaults');
     expect(check).toHaveTextContent('A simplified model: no shadows, no panel losses');
     expect(within(check).getByRole('slider', { name: /Panel area/ })).toHaveValue('1');
-    expect(within(check).getByRole('slider', { name: /Heater/ })).toHaveValue('20');
+    expect(within(check).getByRole('slider', { name: NIGHT_LOAD })).toHaveValue('20');
+    // The night load is heater plus electronics: never "Heater".
+    expect(check.textContent).not.toContain('Heater');
     expect(within(check).getByRole('slider', { name: /Battery/ })).toHaveValue('30');
     // A big heater through a lunar night needs more battery than the slider's 200 kg can give.
-    fireEvent.change(within(check).getByRole('slider', { name: /Heater/ }), {
+    fireEvent.change(within(check).getByRole('slider', { name: NIGHT_LOAD }), {
       target: { value: '100' },
     });
     fireEvent.change(within(check).getByRole('slider', { name: /Battery/ }), {
@@ -727,13 +858,14 @@ describe('Site card', () => {
 
   it('explains why a site is not suitable', () => {
     render(<App />);
-    fireEvent.click(section(plan(), `Not suitable (${unsuitableCount()})`));
-    fireEvent.click(siteRow('Demo Site Golf'));
+    pickMission('demo-mission-c');
+    fireEvent.click(section(plan(), `Not suitable (${unsuitableCount('demo-mission-c')})`));
+    fireEvent.click(siteRow('IM-2 Athena'));
     const card = details();
-    expect(card).toHaveTextContent('Not suitable for Demo Mission A');
-    expect(card).toHaveTextContent(/no line of sight to Earth/i);
-    expect(within(card).getByRole('list', { name: 'Checks for Demo Mission A' })).toHaveTextContent(
-      /CommsFails/,
+    expect(card).toHaveTextContent('Not suitable for Demo Mission C');
+    expect(card).toHaveTextContent(/not enough sunlight for its power/i);
+    expect(within(card).getByRole('list', { name: 'Checks for Demo Mission C' })).toHaveTextContent(
+      /PowerFails/,
     );
   });
 
@@ -770,10 +902,10 @@ describe('Site card', () => {
     window.history.replaceState(
       null,
       '',
-      `/#mission=demo-mission-b&site=demo-site-bravo&t=${new Date(at).toISOString()}`,
+      `/#mission=demo-mission-b&site=ch3&t=${new Date(at).toISOString()}`,
     );
     render(<App />);
-    expect(within(details()).getByRole('heading', { name: 'Demo Site Bravo' })).toBeVisible();
+    expect(within(details()).getByRole('heading', { name: 'Chandrayaan-3 Vikram' })).toBeVisible();
     expect(crumbs()[1]).toHaveTextContent('Demo Mission B');
     expect(strip()).toHaveTextContent(/Simulated/i);
     expect(clock()).toHaveAccessibleName(`Time: ${formatClock(at)}. Change the time`);
@@ -818,11 +950,12 @@ describe('Time', () => {
     const countdown = within(timeBar()).getByRole('button', { name: /^Window (opens|open)/ });
     fireEvent.click(countdown);
     expect(clock()).toHaveTextContent(formatClock(window.start));
-    // A far-side site never sees the Earth, so it never has a window for Mission A.
-    fireEvent.click(section(plan(), `Not suitable (${unsuitableCount()})`));
-    fireEvent.click(siteRow('Demo Site Golf'));
+    // Mission C needs the Sun 10° up: never at IM-2 Athena (84.8° S), so it has no window.
+    pickMission('demo-mission-c');
+    fireEvent.click(section(plan(), /^Not suitable \(\d+\)$/));
+    fireEvent.click(siteRow('IM-2 Athena'));
     expect(timeBar()).toHaveTextContent('No window in this range');
-    expect(timeBar()).toHaveTextContent('Landing windows · Demo Site Golf');
+    expect(timeBar()).toHaveTextContent('Landing windows · IM-2 Athena');
   });
 
   it('steps, plays, labels the days and folds the time bar', () => {
@@ -936,6 +1069,7 @@ describe('Launch slipped assistant', () => {
     missionName: null,
     shift: null,
     date: null,
+    range: null,
     powerDays: null,
     minSunDeg: null,
     minEarthDeg: null,
@@ -1021,7 +1155,7 @@ describe('Launch slipped assistant', () => {
     expect(result).toHaveTextContent('no year in your text, so the next March was used');
     expect(result).toHaveTextContent('The AI only read your question.');
 
-    const site = within(result).getByText(/^Demo Site /, { selector: 'strong' }).textContent;
+    const site = within(result).getByText(isSiteName, { selector: 'strong' }).textContent;
     const windowText = within(result).getByText(/ UTC$/, { selector: 'strong' }).textContent;
     expect(site).toBeTruthy();
     fireEvent.click(within(result).getByRole('button', { name: 'Go there' }));
@@ -1050,22 +1184,25 @@ describe('Launch slipped assistant', () => {
     const result = await screen.findByTestId('slip-answer');
     expect(result).toHaveTextContent('Most Earth time');
     expect(result).toHaveTextContent(/Earth time\s*\d+% of the time/);
-    expect(result).toHaveTextContent('the most Earth time of 9 demo sites');
+    expect(result).toHaveTextContent(`the most Earth time of ${SITES.length} sites`);
     expect(within(result).getByRole('button', { name: 'Go there' })).toBeInTheDocument();
   });
 
   it('answers "does X pass for Mission Y" with the checks and the needs met', async () => {
     answer({
-      missionName: 'Demo Mission A',
-      question: { about: 'passes', siteName: 'Demo Site Golf', from: null, to: null },
+      missionName: 'Demo Mission C',
+      question: { about: 'passes', siteName: 'IM-2 Athena', from: null, to: null },
     });
     render(<App />);
     openRail('Mission');
-    send('Does Demo Site Golf pass for Demo Mission A?');
+    send('Does IM-2 Athena pass for Demo Mission C?');
     const result = await screen.findByTestId('slip-answer');
     expect(result).toHaveTextContent('Does it pass?');
-    // Golf is on the far side: the Earth never rises there.
-    expect(result).toHaveTextContent('Not suitable for Demo Mission A: No line of sight to Earth');
+    expect(result).toHaveTextContent('SiteIM-2 Athena');
+    // IM-2 Athena (84.8° S): the Sun never climbs to Mission C's 10°.
+    expect(result).toHaveTextContent(
+      'Not suitable for Demo Mission C: Not enough sunlight for its power',
+    );
     expect(result).toHaveTextContent(/Mission needs met\s*\d+% of needs met/);
   });
 
@@ -1114,10 +1251,8 @@ describe('Launch slipped assistant', () => {
       custom: true,
     };
     const samples = hourlySky(sampledSpan(range));
-    const sky = new Map(
-      DEMO_SITES.map((site) => [site.id, siteSky(samples, site, changed, range)]),
-    );
-    const expected = slipSummary(rankDemoSites(DEMO_SITES, changed, sky, range), changed, range);
+    const sky = new Map(SITES.map((site) => [site.id, siteSky(samples, site, changed, range)]));
+    const expected = slipSummary(rankSites(SITES, changed, sky, range), changed, range);
     await waitFor(() =>
       expect(within(assistant()).getByRole('status')).toHaveTextContent(`Applied. ${expected}`),
     );
@@ -1345,12 +1480,11 @@ describe('Watch demo', () => {
     // Step 6: Other dates, opened.
     expect(section(details(), /^Other dates/)).toHaveAttribute('aria-expanded', 'true');
     press('Next');
-    // Step 7: the south-polar demo site, in the tilted south-pole view (not a fly-to-site).
-    expect(
-      within(details()).getByRole('heading', { level: 3, name: 'Demo Site India' }),
-    ).toBeVisible();
+    // Step 7: IM-2 Athena, the landing nearest the south pole, in the tilted south-pole view (not
+    // a fly-to-site).
+    expect(within(details()).getByRole('heading', { level: 3, name: 'IM-2 Athena' })).toBeVisible();
     expect(globe).toHaveAttribute('data-camera-view', 'south-pole');
-    expect(globe).not.toHaveAttribute('data-fly-site', 'demo-site-india');
+    expect(globe).not.toHaveAttribute('data-fly-site', 'im2');
     press('Next');
     // Step 8: a spot away from every site, on the whole Moon (not left in the tilted view).
     expect(globe.dataset.picked).toBe('-45,-70');
@@ -1573,10 +1707,10 @@ describe('Fixes from the whole-site review (2026-11-12)', () => {
     expect(share).not.toHaveBeenCalled();
   });
 
-  it('presentation mode says "this month" and DEMO on its label', () => {
+  it('presentation mode says "this month" and DEMO mission on its label', () => {
     render(<App />);
     fireEvent.keyDown(document.body, { key: 'h' });
-    expect(screen.getByTestId('present-label')).toHaveTextContent(/this month\s*DEMO$/);
+    expect(screen.getByTestId('present-label')).toHaveTextContent(/this month\s*DEMO mission$/);
   });
 });
 
@@ -1593,17 +1727,34 @@ describe('Lessons from past landings', () => {
     expect(links.length).toBeGreaterThanOrEqual(LANDING_LESSONS.length);
     for (const link of links) {
       expect(link).toHaveAttribute('href', expect.stringMatching(/^https:\/\//));
-      expect(link).toHaveAttribute('rel', 'noreferrer');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     }
     // Journalism is labelled as such.
     expect(view).toHaveTextContent('PTI via Telangana Today (journalism)');
+  });
+
+  it('"See it in the tool" opens the landing site at its landing date (our engine: before the files)', () => {
+    render(<App />);
+    openRail('Lessons');
+    const view = screen.getByRole('region', { name: 'Lessons from past landings' });
+    // The four lessons that are also landing sites in the tool.
+    expect(within(view).getAllByRole('button', { name: /^See it in the tool: / })).toHaveLength(4);
+    fireEvent.click(
+      within(view).getByRole('button', { name: 'See it in the tool: IM-2 (Athena)' }),
+    );
+    const card = screen.getByRole('complementary', { name: 'Site details' });
+    expect(within(card).getByRole('heading', { level: 3, name: 'IM-2 Athena' })).toBeVisible();
+    expect(clock()).toHaveTextContent('6 Mar 2025 · 00:00 UTC');
+    expect(within(card).getByTestId('positions-label')).toHaveTextContent(ENGINE_LABEL);
   });
 });
 
 describe('Compare sites', () => {
   it('compares picked sites on power, comms and windows; removes one; closes with picks kept', () => {
     render(<App />);
-    const suitable = expectedSites().filter((entry) => entry.rank !== null);
+    // Mission C: IM-2 Athena is the pick that is not suitable.
+    pickMission('demo-mission-c');
+    const suitable = expectedSites('demo-mission-c').filter((entry) => entry.rank !== null);
     const [a, b] = suitable;
     if (!a || !b) throw new Error('need two suitable sites');
     const toggle = (name: string) =>
@@ -1611,8 +1762,8 @@ describe('Compare sites', () => {
     fireEvent.click(toggle(a.site.name));
     expect(plan()).toHaveTextContent('1 site picked. Pick one more to compare.');
     fireEvent.click(toggle(b.site.name));
-    fireEvent.click(section(plan(), `Not suitable (${unsuitableCount()})`));
-    fireEvent.click(toggle('Demo Site Golf'));
+    fireEvent.click(section(plan(), `Not suitable (${unsuitableCount('demo-mission-c')})`));
+    fireEvent.click(toggle('IM-2 Athena'));
     fireEvent.click(within(plan()).getByRole('button', { name: 'Compare (3)' }));
     const panel = screen.getByRole('region', { name: 'Compare sites' });
     const table = within(panel).getByRole('table');
@@ -1620,30 +1771,43 @@ describe('Compare sites', () => {
       within(table)
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent),
-    ).toEqual([`${a.site.name}Remove`, `${b.site.name}Remove`, 'Demo Site GolfRemove']);
+    ).toEqual([`${a.site.name}Remove`, `${b.site.name}Remove`, 'IM-2 AthenaRemove']);
     // One row per check, each saying what it measures.
-    expect(within(table).getByRole('row', { name: /^Power\s*the Sun only/ })).toHaveTextContent(
-      /Longest sunlit stretch/,
-    );
+    const power = within(table).getByRole('row', { name: /^Power\s*the Sun only/ });
+    expect(power).toHaveTextContent(/Longest sunlit stretch/);
+    expect(power).toHaveTextContent(/OK.*OK.*Fails/);
     expect(within(table).getByRole('row', { name: /^Comms\s*the Earth only/ })).toHaveTextContent(
-      /OK.*OK.*Fails/,
+      /Earth at least 10° up/,
     );
     const usable = within(table).getByRole('row', {
       name: /^Usable window\s*the Sun and Earth both/,
     });
-    expect(usable).toHaveTextContent(/in this month \(needs 3\)/);
+    expect(usable).toHaveTextContent(/in this month \(needs 2\)/);
     // "Best" on the usable window is the Sites list's best (when it is among the picks).
-    if (a.site.id === topSite().site.id) expect(usable).toHaveTextContent('Best');
+    if (a.site.id === topSite('demo-mission-c').site.id) {
+      expect(usable).toHaveTextContent('Best');
+    }
     expect(within(table).getByRole('row', { name: /^Best window/ })).toHaveTextContent('days');
+    // The range's hours, one row each.
+    const h = (value: number) => `${value.toLocaleString('en-US')} h`;
+    expect(within(table).getByRole('row', { name: /^Hours of Sun/ })).toHaveTextContent(
+      h(a.assessment.sky.sunHours),
+    );
+    expect(within(table).getByRole('row', { name: /^Hours of Earth/ })).toHaveTextContent(
+      h(a.assessment.sky.earthHours),
+    );
+    expect(within(table).getByRole('row', { name: /^Hours of both/ })).toHaveTextContent(
+      h(b.assessment.sky.bothHours),
+    );
     expect(within(table).getByRole('row', { name: /^Now/ })).toHaveTextContent(/Sun .*Earth/);
     expect(within(panel).getByTestId('compare-verdict')).toHaveTextContent(
-      'Demo Site Golf is not suitable',
+      'IM-2 Athena is not suitable',
     );
     fireEvent.click(within(panel).getByRole('button', { name: `Remove ${b.site.name}` }));
     expect(within(table).getAllByRole('columnheader')).toHaveLength(2);
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(screen.queryByRole('region', { name: 'Compare sites' })).not.toBeInTheDocument();
-    expect(toggle('Demo Site Golf')).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle('IM-2 Athena')).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
@@ -1702,7 +1866,13 @@ describe('Anywhere on the Moon', () => {
     expect(card).toHaveTextContent(
       expected.assessment.suitable ? 'Power and comms OK for Demo Mission A' : 'Not suitable',
     );
-    expect(card).toHaveTextContent(/Nearest demo site: Demo Site \w+, [\d,]+ km away/);
+    const nearest = expected.nearest;
+    if (!nearest) throw new Error('no nearest site');
+    expect(card).toHaveTextContent(
+      `Nearest landing site: ${nearest.site.name}, ${nearest.distanceKm.toLocaleString('en-US')} km away`,
+    );
+    expect(card).toHaveTextContent('Flat horizon: no terrain data for this point');
+    expect(within(card).getAllByText(COMMS_NOTE)).toHaveLength(1);
     expect(within(card).getByRole('img', { name: /over the horizon/ })).toBeInTheDocument();
     expect(screen.getByTestId('moon-globe').dataset.picked).toBe('20.25,40.5');
     expect(timeBar()).toHaveTextContent('Landing windows · Your point 20.3° N, 40.5° E');
@@ -1717,9 +1887,9 @@ describe('Anywhere on the Moon', () => {
   it('is replaced by a site chosen afterwards; Moon clears it', async () => {
     await renderApp();
     fireEvent.click(screen.getByRole('button', { name: 'simulate ground click' }));
-    fireEvent.click(await mapMarker('Demo Site Alpha'));
+    fireEvent.click(await mapMarker('IM-1 Odysseus'));
     expect(screen.getByTestId('moon-globe').dataset.picked).toBe('none');
-    expect(within(details()).getByRole('heading', { name: 'Demo Site Alpha' })).toBeVisible();
+    expect(within(details()).getByRole('heading', { name: 'IM-1 Odysseus' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'simulate ground click' }));
     fireEvent.click(crumbs()[0] as HTMLElement);
     expect(screen.getByTestId('moon-globe').dataset.picked).toBe('none');
@@ -1759,8 +1929,8 @@ describe('Map', () => {
     fireEvent.click(rankedRows()[0] ?? plan());
     expect(globe.dataset.flySite).toBe(topSite().site.id);
     expect(globe.dataset.flySeq).toBe('1');
-    fireEvent.click(await mapMarker('Demo Site Golf'));
-    expect(globe.dataset.flySite).toBe('demo-site-golf');
+    fireEvent.click(await mapMarker('IM-2 Athena'));
+    expect(globe.dataset.flySite).toBe('im2');
     expect(globe.dataset.flySeq).toBe('2');
   });
 
@@ -1793,19 +1963,392 @@ describe('Map', () => {
     expect(globe).toHaveAttribute('data-camera-view', 'south-pole');
   });
 
-  it('shows the Elevation and Slope layers, unusable until elevation data is loaded', async () => {
+  it('has a "Map layers" button in place of the old Elevation and Slope buttons', async () => {
     await renderApp();
     const controls = screen.getByRole('group', { name: 'Map' });
     for (const name of ['Elevation', 'Slope']) {
-      const layer = within(controls).getByRole('button', { name });
-      expect(layer).toHaveAttribute('aria-disabled', 'true');
-      expect(layer).toHaveAccessibleDescription(`${name}: no elevation data loaded yet`);
-      fireEvent.click(layer);
-      expect(layer).toHaveAttribute('aria-pressed', 'false');
+      expect(within(controls).queryByRole('button', { name })).toBeNull();
     }
-    // The place card says the same, with no number.
-    expect(within(details()).getByTestId('elevation-line')).toHaveTextContent(
-      'No elevation data loaded yet',
+    for (const button of within(controls).getAllByRole('button')) {
+      expect(button).not.toHaveAttribute('aria-disabled');
+    }
+    expect(within(controls).getByRole('button', { name: 'Map layers' })).toBeInTheDocument();
+    // The best site now is outside 80° S: its card says the layers don't reach it.
+    if (topSite().site.lat > -80) {
+      expect(within(details()).getByTestId('elevation-line')).toHaveTextContent(
+        'No data here: this tool covers 80° S to the pole',
+      );
+    }
+  });
+});
+
+describe('Map layers: elevation and slope', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens the layers panel; switching slope on draws it with its legend and readings', async () => {
+    // The value tiles, read from disk as the browser would fetch them.
+    const root = decodeURIComponent(new URL(import.meta.url).pathname)
+      .replace(/^\/([A-Za-z]:)/, '$1')
+      .replace(/tests\/unit\/[^/]*$/, '');
+    const { existsSync, readFileSync } = await import('node:fs');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async (input) => {
+        const path = String(input).replace(/^.*?data\/layers\//, `${root}public/data/layers/`);
+        if (!existsSync(path)) return new Response('missing', { status: 404 });
+        return new Response(readFileSync(path).slice().buffer);
+      }),
     );
+    await renderApp();
+    const globe = screen.getByTestId('moon-globe');
+    expect(globe).toHaveAttribute('data-layers', 'none');
+    fireEvent.click(screen.getByRole('button', { name: 'Map layers' }));
+    const panel = screen.getByRole('region', { name: 'Map layers' });
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Slope' }));
+    expect(globe).toHaveAttribute('data-layers', 'slope:0.8');
+    expect(within(panel).getByRole('figure', { name: 'Slope legend, °' })).toBeInTheDocument();
+    fireEvent.change(within(panel).getByRole('slider', { name: 'Slope opacity' }), {
+      target: { value: '50' },
+    });
+    expect(globe).toHaveAttribute('data-layers', 'slope:0.5');
+    // Elevation too: drawn under slope (first in the list), with its legend in metres. Switched on
+    // last, and with values, it takes the readings.
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Elevation' }));
+    expect(globe).toHaveAttribute('data-layers', 'elevation:0.8 slope:0.5');
+    expect(within(panel).getByRole('figure', { name: 'Elevation legend, m' })).toBeInTheDocument();
+    expect(panel).not.toHaveTextContent('Legend unavailable');
+    expect(within(panel).getByRole('radio', { name: 'Elevation' })).toBeChecked();
+    // The pointer over IM-1: the values from the value tiles, at 40 m.
+    fireEvent.click(screen.getByRole('button', { name: 'simulate hover over IM-1' }));
+    await waitFor(() =>
+      expect(within(panel).getByTestId('layer-readout')).toHaveTextContent(
+        'Elevation 2592 m · 40 mReal data',
+      ),
+    );
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Slope' }));
+    await waitFor(() =>
+      expect(within(panel).getByTestId('layer-readout')).toHaveTextContent(
+        'Slope 12.28° · 40 mReal data',
+      ),
+    );
+    // A tap (the picked point) replaces the hover point: 20° N is outside the layers.
+    fireEvent.click(screen.getByRole('button', { name: 'simulate ground click' }));
+    await waitFor(() =>
+      expect(within(panel).getByTestId('layer-readout')).toHaveTextContent(
+        'No data here: this tool covers 80° S to the pole',
+      ),
+    );
+    fireEvent.click(within(panel).getByRole('button', { name: 'Close map layers' }));
+    expect(screen.queryByRole('region', { name: 'Map layers' })).toBeNull();
+    // Closing the panel keeps the layers on.
+    expect(globe).toHaveAttribute('data-layers', 'elevation:0.8 slope:0.5');
+  });
+});
+
+describe('Sun and Earth positions, and JPL Horizons', () => {
+  it('says where the positions came from, and links to the same query in JPL Horizons', () => {
+    render(<App />);
+    const top = topSite();
+    const card = details();
+    // These tests run without the Horizons files, so our engine.
+    expect(within(card).getByTestId('positions-label')).toHaveTextContent(ENGINE_LABEL);
+    for (const body of ['sun', 'earth'] as const) {
+      const link = within(card).getByRole('link', {
+        name: `View the ${body === 'sun' ? 'Sun' : 'Earth'} in JPL Horizons (opens in a new tab)`,
+      });
+      expect(link).toHaveAttribute('href', viewInHorizonsUrl(body, top.site, RANGE));
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+  });
+
+  it('uses our engine for a picked point, with no Horizons links', async () => {
+    await renderApp();
+    fireEvent.click(screen.getByRole('button', { name: 'simulate ground click' }));
+    const card = pointCard();
+    expect(within(card).getByTestId('positions-label')).toHaveTextContent(ENGINE_LABEL);
+    expect(within(card).queryByRole('link', { name: /JPL Horizons/ })).toBeNull();
+  });
+
+  it('shows the "Checked against JPL Horizons" table in About → Data and credits', () => {
+    render(<App />);
+    fireEvent.click(railItem('About'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Data and credits' }));
+    expect(
+      within(screen.getByRole('dialog')).getByRole('region', {
+        name: 'Checked against JPL Horizons',
+      }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('Dates to check', () => {
+  const DEC: TimeRange = { start: Date.UTC(2026, 11, 12), end: Date.UTC(2026, 11, 26) };
+
+  function dates() {
+    const view = within(missionView()).getByRole('region', { name: 'Dates to check' });
+    return {
+      view,
+      start: within(view).getByLabelText('Start (UTC)'),
+      stop: within(view).getByLabelText('Stop (UTC)'),
+    };
+  }
+
+  it('checks the picked dates everywhere, and moves the time bar to their start', () => {
+    render(<App />);
+    expect(dates().view).toHaveTextContent('Checking the time bar’s 29.5 days.');
+    fireEvent.change(dates().start, { target: { value: '2026-12-12' } });
+    expect(dates().view).toHaveTextContent('Pick both dates.');
+    fireEvent.change(dates().stop, { target: { value: '2026-12-25' } });
+    expect(dates().view).toHaveTextContent('Checking 12 Dec 2026 to 25 Dec 2026 (UTC)');
+    expect(clock()).toHaveTextContent('12 Dec 2026 · 00:00 UTC');
+
+    const expected = expectedSites('demo-mission-a', 'window', DEC);
+    const suitable = expected.filter((entry) => entry.rank !== null);
+    expect(plan()).toHaveTextContent('Checking 12 Dec 2026 to 25 Dec 2026 (UTC)');
+    expect(rankedRows()).toHaveLength(suitable.length);
+    const first = suitable[0];
+    if (!first) throw new Error('no suitable site in those dates');
+    expect(rankedRows()[0]).toHaveTextContent(first.site.name);
+    expect(rankedRows()[0]).toHaveTextContent(hoursText(first));
+    // The horizon view, the links and the checks follow the same dates.
+    fireEvent.click(rankedRows()[0] ?? plan());
+    expect(
+      within(details()).getByRole('link', { name: /View the Sun in JPL Horizons/ }),
+    ).toHaveAttribute('href', viewInHorizonsUrl('sun', first.site, DEC));
+  });
+
+  it('never calls picked dates "this month"', () => {
+    render(<App />);
+    fireEvent.change(dates().start, { target: { value: '2026-12-12' } });
+    fireEvent.change(dates().stop, { target: { value: '2026-12-25' } });
+    expect(rankedRows()[0]).toHaveAccessibleName(/usable in these dates/);
+    const card = details();
+    expect(within(card).getByRole('group', { name: 'These dates' })).toHaveTextContent(
+      /Sun up\s*\d+% of these dates/,
+    );
+    expect(card).not.toHaveTextContent(/this month|of the month/);
+  });
+
+  it('clears picked dates for the guided demo, and puts them back after it', () => {
+    render(<App />);
+    fireEvent.change(dates().start, { target: { value: '2026-12-12' } });
+    fireEvent.change(dates().stop, { target: { value: '2026-12-25' } });
+    watchDemo();
+    expect(plan()).not.toHaveTextContent('Checking 12 Dec 2026');
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Demo' })).getByRole('button', { name: 'Skip' }),
+    );
+    expect(dates().start).toHaveValue('2026-12-12');
+    expect(plan()).toHaveTextContent('Checking 12 Dec 2026 to 25 Dec 2026 (UTC)');
+  });
+
+  it('shares the picked dates in the link, and a link with dates opens on them', async () => {
+    const writeText = vi.fn<(url: string) => Promise<void>>(() => Promise.resolve());
+    vi.stubGlobal('navigator', { ...navigator, share: undefined, clipboard: { writeText } });
+    render(<App />);
+    fireEvent.change(dates().start, { target: { value: '2026-12-12' } });
+    fireEvent.change(dates().stop, { target: { value: '2026-12-25' } });
+    fireEvent.click(within(details()).getByRole('button', { name: 'Share' }));
+    await within(details()).findByText('Link copied.');
+    const url = String(writeText.mock.calls[0]?.[0]);
+    expect(url).toContain('&from=2026-12-12&to=2026-12-25&');
+    vi.unstubAllGlobals();
+    cleanup();
+    window.history.replaceState(null, '', url.slice(url.indexOf('#') - 1));
+    render(<App />);
+    expect(plan()).toHaveTextContent('Checking 12 Dec 2026 to 25 Dec 2026 (UTC)');
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('explains impossible dates inline and keeps checking what it had', () => {
+    render(<App />);
+    fireEvent.change(dates().start, { target: { value: '2026-12-25' } });
+    fireEvent.change(dates().stop, { target: { value: '2026-12-12' } });
+    expect(within(dates().view).getByRole('alert')).toHaveTextContent(
+      'The stop date is before the start date.',
+    );
+    expect(dates().start).toHaveAttribute('aria-invalid', 'true');
+    expect(plan()).not.toHaveTextContent('Checking 25 Dec');
+    fireEvent.change(dates().start, { target: { value: '2026-01-01' } });
+    fireEvent.change(dates().stop, { target: { value: '2027-01-01' } });
+    expect(within(dates().view).getByRole('alert')).toHaveTextContent('Pick at most 12 months.');
+  });
+
+  it('delays both dates by a week or a month, and goes back to the time bar’s 29.5 days', () => {
+    render(<App />);
+    expect(within(dates().view).getByRole('button', { name: 'Delay 1 week' })).toBeDisabled();
+    fireEvent.change(dates().start, { target: { value: '2026-12-12' } });
+    fireEvent.change(dates().stop, { target: { value: '2026-12-25' } });
+    fireEvent.click(within(dates().view).getByRole('button', { name: 'Delay 1 week' }));
+    expect(dates().start).toHaveValue('2026-12-19');
+    expect(dates().stop).toHaveValue('2027-01-01');
+    expect(clock()).toHaveTextContent('19 Dec 2026 · 00:00 UTC');
+    fireEvent.click(within(dates().view).getByRole('button', { name: 'Delay 1 month' }));
+    expect(dates().view).toHaveTextContent('Checking 19 Jan 2027 to 1 Feb 2027 (UTC)');
+    fireEvent.click(
+      within(dates().view).getByRole('button', { name: 'Use the time bar’s 29.5 days' }),
+    );
+    expect(dates().start).toHaveValue('');
+    expect(plan()).not.toHaveTextContent('Checking 19 Jan');
+  });
+
+  it('takes dates from the "Launch slipped?" assistant: shown first, used on Apply', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(
+        async () =>
+          new Response(
+            JSON.stringify({
+              reading: {
+                missionName: null,
+                shift: null,
+                date: null,
+                range: {
+                  from: { day: 12, month: 'December', year: null },
+                  to: { day: 25, month: 'December', year: null },
+                },
+                powerDays: null,
+                minSunDeg: null,
+                minEarthDeg: null,
+                relay: null,
+                question: null,
+                unclear: [],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+      ),
+    );
+    render(<App />);
+    const box = within(missionView()).getByRole('region', { name: 'Launch slipped?' });
+    fireEvent.change(within(box).getByRole('textbox', { name: 'Describe the change' }), {
+      target: { value: 'Plan for between 12 Dec and 25 Dec' },
+    });
+    fireEvent.click(within(box).getByRole('button', { name: 'Read it' }));
+    const readBack = await screen.findByTestId('slip-read-back');
+    expect(readBack).toHaveTextContent('Dates checked12 Dec 2026 to 25 Dec 2026 (UTC)');
+    expect(readBack).toHaveTextContent('no year in your text, so the next December was used');
+    // Nothing changes before Apply.
+    expect(dates().start).toHaveValue('');
+    fireEvent.click(within(readBack).getByRole('button', { name: 'Apply' }));
+    expect(dates().start).toHaveValue('2026-12-12');
+    expect(dates().stop).toHaveValue('2026-12-25');
+    expect(clock()).toHaveTextContent('12 Dec 2026 · 00:00 UTC');
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('Over the year, distances and night survival', () => {
+  it('shows light, water and Earth over the year at the top of Site details, each tagged', () => {
+    render(<App />);
+    const top = topSite();
+    const year = within(details()).getByRole('group', { name: 'Over the year' });
+    const polar = top.site.lat <= -80;
+    expect(year).toHaveTextContent(
+      polar
+        ? '% of the year in sunlightUnavailable: the PGDA lighting file isn’t loaded yetUnavailable'
+        : '% of the year in sunlightNot applicable: outside south-polar dataUnavailable',
+    );
+    expect(year).toHaveTextContent('Nearest permanent shadow (where ice may be)');
+    // The Horizons files are not loaded in these tests: Earth is unavailable until they are.
+    expect(year).toHaveTextContent(
+      'Earth above the horizon in 2027Unavailable until the JPL Horizons positions loadUnavailable',
+    );
+  });
+
+  it('gives the distance from the south pole in Site details', () => {
+    render(<App />);
+    const top = topSite();
+    expect(within(details()).getByRole('group', { name: 'The landing' })).toHaveTextContent(
+      `From the south pole${formatKm(haversineKm(top.site, SOUTH_POLE))}Calculated`,
+    );
+  });
+
+  it('has a night-survival block for a landing site, none for a picked point', async () => {
+    await renderApp();
+    const card = details();
+    fireEvent.click(within(card).getByRole('button', { name: 'Night survival' }));
+    const block = within(card).getByTestId('night-survival');
+    expect(within(block).getByTestId('night-verdict')).toHaveTextContent(
+      /^(Survives|Doesn’t survive|Can't judge)/,
+    );
+    expect(block).toHaveTextContent(/Battery needed here: /);
+    expect(block.textContent).not.toContain('Heater');
+    fireEvent.click(screen.getByRole('button', { name: 'simulate ground click' }));
+    expect(within(pointCard()).queryByRole('button', { name: 'Night survival' })).toBeNull();
+  });
+
+  it('uses the Power check’s slider watts for "Battery needed here"', () => {
+    render(<App />);
+    const card = details();
+    fireEvent.click(section(card, /^Power check/));
+    fireEvent.click(section(card, /^Power details/));
+    fireEvent.change(within(card).getByRole('slider', { name: NIGHT_LOAD }), {
+      target: { value: '55' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Night survival' }));
+    expect(within(card).getByTestId('night-survival')).toHaveTextContent(
+      /for your 55 W night load \(set in Power details\)/,
+    );
+  });
+
+  it('compares the distance from the pole, the year values, and the distances between the sites', () => {
+    render(<App />);
+    const [a, b] = expectedSites().filter((entry) => entry.rank !== null);
+    if (!a || !b) throw new Error('need two suitable sites');
+    fireEvent.click(within(plan()).getByRole('button', { name: `Compare ${a.site.name}` }));
+    fireEvent.click(within(plan()).getByRole('button', { name: `Compare ${b.site.name}` }));
+    fireEvent.click(within(plan()).getByRole('button', { name: 'Compare (2)' }));
+    const panel = screen.getByRole('region', { name: 'Compare sites' });
+    const table = within(panel).getByRole('table');
+    expect(within(table).getByRole('row', { name: /^From the south pole/ })).toHaveTextContent(
+      formatKm(haversineKm(a.site, SOUTH_POLE)),
+    );
+    for (const name of [
+      /^% of the year in sunlight/,
+      /^Nearest permanent shadow \(where ice may be\)/,
+      /^Earth above the horizon in 2027/,
+    ]) {
+      expect(within(table).getByRole('row', { name })).toHaveTextContent(/Unavailable/);
+    }
+    expect(
+      within(panel).getByRole('list', { name: 'Distances between the compared sites' }),
+    ).toHaveTextContent(
+      `${a.site.name} to ${b.site.name}: ${formatKm(haversineKm(a.site, b.site))}`,
+    );
+  });
+});
+
+describe('Compare Timeline', () => {
+  it('moves the dates checked from the Timeline bracket, and the Sites list follows', () => {
+    render(<App />);
+    const [a, b] = expectedSites().filter((entry) => entry.rank !== null);
+    if (!a || !b) throw new Error('need two suitable sites');
+    fireEvent.click(within(plan()).getByRole('button', { name: `Compare ${a.site.name}` }));
+    fireEvent.click(within(plan()).getByRole('button', { name: `Compare ${b.site.name}` }));
+    fireEvent.click(within(plan()).getByRole('button', { name: 'Compare (2)' }));
+    const panel = screen.getByRole('region', { name: 'Compare sites' });
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Timeline' }));
+    const bracket = within(panel).getByRole('slider', { name: 'Dates checked' });
+    // The time bar's real 29.5 days, until the bracket moves: then 30 whole days.
+    expect(bracket.getAttribute('aria-valuetext')).toMatch(
+      /^the time bar’s 29\.5 days \(31 Oct 18:00 to 30 Nov 06:00 UTC\); /,
+    );
+    fireEvent.keyDown(bracket, { key: 'ArrowRight' });
+    expect(bracket.getAttribute('aria-valuetext')).toMatch(/^1 Nov 2026 to 30 Nov 2026 \(UTC\); /);
+    expect(clock()).toHaveTextContent('1 Nov 2026 · 00:00 UTC');
+    const rows = within(panel).getByRole('list', { name: 'Sites on the timeline' });
+    const moved = expectedSites('demo-mission-a', 'window', {
+      start: Date.UTC(2026, 10, 1),
+      end: Date.UTC(2026, 11, 1),
+    });
+    const first = moved.find((entry) => entry.site.id === a.site.id);
+    if (!first) throw new Error('site missing');
+    expect(rows).toHaveTextContent(hoursText(first));
+    fireEvent.click(railItem('Sites'));
+    expect(plan()).toHaveTextContent('Checking 1 Nov 2026 to 30 Nov 2026 (UTC)');
   });
 });

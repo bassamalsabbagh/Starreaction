@@ -1,9 +1,9 @@
 import { useId, useMemo } from 'react';
+import { siteHourlySky, type HorizonsSeries } from '../../services/horizonsData';
 import { azimuthElevationOf, type LatLon } from '../../utils/lunarSky';
 import type { BodyNow } from '../../utils/riseSet';
-import { hourlySky } from '../../utils/skyVisibility';
-import type { HorizonProfile } from '../../utils/terrainShadow';
-import type { TimeRange } from '../../utils/time';
+import { edgeCutRuns, type AzimuthRun, type HorizonProfile } from '../../utils/terrainShadow';
+import { rangeWords, type TimeRange } from '../../utils/time';
 import styles from './HorizonView.module.css';
 
 interface HorizonViewProps {
@@ -15,6 +15,10 @@ interface HorizonViewProps {
   minSunElevationDeg: number;
   /** The terrain skyline around the place, when elevation data is loaded for it. */
   terrain: HorizonProfile | null;
+  /** What the place is, for the flat-horizon label ("no terrain data for this site"). */
+  kind?: 'site' | 'point';
+  /** A fixed site's JPL Horizons positions (the engine where they have no data, and for points). */
+  series?: HorizonsSeries | null;
 }
 
 // Drawn at about the panel's own width, so the labels show at their real size.
@@ -29,11 +33,18 @@ interface SkyPoint {
   elevation: number;
 }
 
+/** "120°–150°" (whole azimuths, both ends included), or "120°" for one degree. */
+function runText(run: AzimuthRun): string {
+  const end = (run.start + run.length - 1) % 360;
+  return run.length === 1 ? `${run.start}°` : `${run.start}°–${end}°`;
+}
+
 /**
  * The view from the place: the horizon across the middle, compass directions along the bottom,
  * height above the horizon up the side. The Sun's and the Earth's paths over the month are lines;
  * where they are now is a dot with its name. The Moon has no air, so the horizon is the edge of
- * the ground: flat (a smooth Moon) until terrain data is loaded for the place.
+ * the ground: flat (a smooth Moon) until terrain data is loaded for the place. Directions whose
+ * terrain ray ran off the edge of the elevation data are marked "cut off at data edge".
  */
 export function HorizonView({
   place,
@@ -42,17 +53,20 @@ export function HorizonView({
   earth,
   minSunElevationDeg,
   terrain,
+  kind = 'site',
+  series = null,
 }: HorizonViewProps) {
   const titleId = useId();
   const descId = useId();
+  const words = rangeWords(range);
   const clipId = useId();
 
   const paths = useMemo(() => {
-    const samples = hourlySky(range);
+    const { samples } = siteHourlySky(series, place, range);
     const of = (pick: 'sun' | 'earth'): SkyPoint[] =>
       samples.map((sample) => azimuthElevationOf(sample[pick], place));
     return { sun: of('sun'), earth: of('earth') };
-  }, [place, range]);
+  }, [place, range, series]);
 
   // The height scale follows the sky: at the poles everything sits within a few degrees of the
   // horizon, and a fixed 0–90° scale would flatten it to a line.
@@ -93,6 +107,26 @@ export function HorizonView({
         return `${step === 0 ? 'M' : 'L'}${px.toFixed(1)} ${y(terrain.elevations[Math.floor(azimuth) % 360] ?? 0).toFixed(1)}`;
       }).join('') + `L${PAD.left + PLOT_W} ${PAD.top + PLOT_H}L${PAD.left} ${PAD.top + PLOT_H}Z`
     : null;
+
+  // Where the terrain is only known part of the way out: bands across the chart, split where a run
+  // crosses the chart's edge.
+  const cutRuns = terrain ? edgeCutRuns(terrain) : [];
+  const cutBands = cutRuns.flatMap((run) => {
+    const from = (((run.start - centre + 180) % 360) + 360) % 360;
+    const parts =
+      from + run.length > 360
+        ? [
+            { from, length: 360 - from },
+            { from: 0, length: from + run.length - 360 },
+          ]
+        : [{ from, length: run.length }];
+    return parts.map((part) => ({
+      key: `${run.start}-${part.from}`,
+      x: PAD.left + (part.from / 360) * PLOT_W,
+      width: (part.length / 360) * PLOT_W,
+    }));
+  });
+  const cutText = cutRuns.map(runText).join(', ');
 
   const compass = [
     { label: 'N', azimuth: 0 },
@@ -135,9 +169,9 @@ export function HorizonView({
         role="img"
         aria-labelledby={`${titleId} ${descId}`}
       >
-        <title id={titleId}>The Sun and Earth over the horizon this month</title>
+        <title id={titleId}>The Sun and Earth over the horizon {words.now}</title>
         <desc id={descId}>
-          {`${describe(sun, 'Sun')}. ${describe(earth, 'Earth')}. The Sun's highest this month: ${Math.round(sunHigh)}°.`}
+          {`${describe(sun, 'Sun')}. ${describe(earth, 'Earth')}. The Sun's highest ${words.now}: ${Math.round(sunHigh)}°.${cutText ? ` Horizon cut off at data edge toward ${cutText}.` : ''}`}
         </desc>
         <defs>
           <clipPath id={clipId}>
@@ -156,6 +190,17 @@ export function HorizonView({
         {skyline ? (
           <path d={skyline} className={styles.terrain} clipPath={`url(#${clipId})`} />
         ) : null}
+        {cutBands.map((band) => (
+          <rect
+            key={band.key}
+            x={band.x}
+            y={PAD.top}
+            width={band.width}
+            height={PLOT_H}
+            className={styles.edgeCut}
+            data-testid="edge-cut-band"
+          />
+        ))}
 
         {yTicks.map((tick) => (
           <g key={tick}>
@@ -202,7 +247,7 @@ export function HorizonView({
       </svg>
       <figcaption className={styles.caption}>
         <span className={styles.key}>
-          <span className={styles.swatchSun} aria-hidden="true" /> Sun path this month
+          <span className={styles.swatchSun} aria-hidden="true" /> Sun path {words.now}
         </span>
         <span className={styles.key}>
           <span className={styles.swatchEarth} aria-hidden="true" /> Earth path
@@ -213,10 +258,15 @@ export function HorizonView({
             {minSunElevationDeg}°
           </span>
         ) : null}
+        {cutText ? (
+          <span className={styles.key}>
+            <span className={styles.swatchCut} aria-hidden="true" /> Cut off at data edge: {cutText}
+          </span>
+        ) : null}
         <span className={styles.horizonNote}>
           {terrain
             ? `Terrain horizon: ${terrain.source}, known to ${Math.round(terrain.radiusM / 1000)} km`
-            : 'Flat horizon: no terrain data loaded yet, so crater rims and hills are not shown.'}
+            : `Flat horizon: no terrain data for this ${kind}`}
         </span>
       </figcaption>
     </figure>

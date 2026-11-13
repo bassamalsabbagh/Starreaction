@@ -2,7 +2,8 @@
  * "Add your own mission": the editable needs, their DEMO ranges, validation, unique names and
  * saved presets. A custom mission sets exactly what the checks read: the lowest Sun height that
  * still powers its panels, the lowest Earth height for direct contact, the days of power it needs,
- * and whether it has a relay. Sites stay DEMO. Pure, apart from the two guarded storage calls.
+ * and whether it has a relay. The sites are the real landings. Pure, apart from the two guarded
+ * storage calls.
  */
 import type { DemoMission } from '../../data/demoData';
 

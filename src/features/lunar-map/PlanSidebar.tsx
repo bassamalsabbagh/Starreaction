@@ -3,11 +3,11 @@ import { Collapsible } from '../../components/Collapsible';
 import { CompareToggle } from '../../components/CompareToggle';
 import {
   SITE_ORDER_LABEL,
-  bestDemoSite,
+  bestSite,
   formatDays,
   formatShare,
   type DemoMission,
-  type RankedDemoSite,
+  type RankedSite,
   type SiteOrder,
 } from '../../data/demoData';
 import { formatNeedsMet, formatNeedsMetShort, needsMet } from '../../data/needsMet';
@@ -18,6 +18,8 @@ import {
   RANGE_MS,
   formatWindowLength,
   formatWindowRange,
+  rangeWords,
+  type RangeWords,
   type TimeRange,
 } from '../../utils/time';
 import { CoordinateSearch } from './CoordinateSearch';
@@ -26,7 +28,7 @@ import styles from './PlanSidebar.module.css';
 
 interface PlanSidebarProps {
   mission: DemoMission;
-  rankedSites: readonly RankedDemoSite[];
+  rankedSites: readonly RankedSite[];
   /** The checked month: a best window that runs past it also says how much is inside. */
   range: TimeRange;
   selectedSiteId: string | null;
@@ -47,27 +49,46 @@ interface PlanSidebarProps {
   onToggleComparePanel: () => void;
   /** The compare panel's id, for the Compare button's aria-controls. */
   comparePanelId: string;
+  /** The dates being checked, when picked in the Mission view ("12 Dec to 25 Dec 2026 (UTC)"). */
+  rangeText?: string | null;
   /** Opens a section for the guided demo (a new seq each time); not saved as a preference. */
   reveal?: { section: SectionId; seq: number } | null;
 }
 
 export type SectionId = 'notSuitable';
 
-const ORDERS: readonly SiteOrder[] = ['window', 'sunlight', 'earth', 'name'];
+const ORDERS: readonly SiteOrder[] = ['window', 'sunHours', 'earthHours', 'bothHours', 'name'];
+
+/** "1,234 h". */
+function hours(value: number): string {
+  return `${value.toLocaleString('en-US')} h`;
+}
+
+/** The range's hours of Sun, of Earth and of both, on one line. */
+function hoursText(entry: RankedSite): string {
+  const { sky } = entry.assessment;
+  return `Sun ${hours(sky.sunHours)} · Earth ${hours(sky.earthHours)} · both ${hours(sky.bothHours)}`;
+}
 
 /** The number a row shows for the chosen order, and the word under it. */
-function rowValue(entry: RankedDemoSite, order: SiteOrder): { value: string; word: string } {
+function rowValue(
+  entry: RankedSite,
+  order: SiteOrder,
+  words: RangeWords,
+): { value: string; word: string } {
   const { assessment } = entry;
   switch (order) {
-    case 'sunlight':
-      return { value: formatShare(assessment.sky.sunPct), word: 'Sun up' };
-    case 'earth':
-      return { value: formatShare(assessment.sky.earthPct), word: 'Earth up' };
+    case 'sunHours':
+      return { value: hours(assessment.sky.sunHours), word: 'of Sun' };
+    case 'earthHours':
+      return { value: hours(assessment.sky.earthHours), word: 'of Earth' };
+    case 'bothHours':
+      return { value: hours(assessment.sky.bothHours), word: 'of both' };
     default:
       // The part of the usable window inside this month: what the checks use (not its whole length).
       return {
         value: formatDays(assessment.usableDays).replace(' days', ' d'),
-        word: 'usable this month',
+        word: `usable ${words.now}`,
       };
   }
 }
@@ -94,6 +115,7 @@ export function PlanSidebar({
   compareOpen,
   onToggleComparePanel,
   comparePanelId,
+  rangeText = null,
   reveal = null,
 }: PlanSidebarProps) {
   const selectedRowRef = useRef<HTMLButtonElement>(null);
@@ -105,9 +127,10 @@ export function PlanSidebar({
     if (!notSuitableOpen) setNotSuitableOpen(true);
   }
 
+  const words = rangeWords(range);
   const suitable = rankedSites.filter((entry) => entry.rank !== null);
   const notSuitable = rankedSites.filter((entry) => entry.rank === null);
-  const bestId = bestDemoSite(rankedSites)?.site.id ?? null;
+  const bestId = bestSite(rankedSites)?.site.id ?? null;
   const selectedIsUnsuitable = notSuitable.some((entry) => entry.site.id === selectedSiteId);
 
   // If the selection is (or becomes, after a mission change) unsuitable, open its group so the
@@ -206,9 +229,11 @@ export function PlanSidebar({
       <div className={styles.viewHeader}>
         <h2 className={styles.viewTitle}>Sites</h2>
         <span className={styles.viewMeta}>
-          {mission.name} · {suitable.length} suitable · DEMO sites
+          {mission.name} · {suitable.length} of {rankedSites.length} landing sites suitable
         </span>
       </div>
+
+      {rangeText ? <p className={styles.rangeNote}>Checking {rangeText}</p> : null}
 
       <CoordinateSearch onGo={onGoToPoint} />
 
@@ -228,7 +253,7 @@ export function PlanSidebar({
 
       {suitable.length === 0 ? (
         <p className={styles.none}>
-          No site suits {mission.name} in this month. Try another mission or move the time.
+          No site suits {mission.name} {words.within}. Try another mission or move the time.
         </p>
       ) : null}
 
@@ -238,7 +263,7 @@ export function PlanSidebar({
           const selected = site.id === selectedSiteId;
           // The best match is the longest usable window, wherever the chosen order puts it.
           const best = site.id === bestId;
-          const shown = rowValue(entry, order);
+          const shown = rowValue(entry, order, words);
           const needs = formatNeedsMetShort(needsMet(assessment, mission));
           const window = assessment.bestWindow;
           return (
@@ -268,6 +293,7 @@ export function PlanSidebar({
                 <span className={styles.rowMain}>
                   <span className={styles.name}>{site.name}</span>
                   <span className={styles.needs}>{needs}</span>
+                  <span className={styles.hours}>{hoursText(entry)}</span>
                   <span className={styles.bar} aria-hidden="true">
                     <span
                       className={styles.barFill}
@@ -288,10 +314,10 @@ export function PlanSidebar({
                       <span className={styles.bestLabel}>Best window</span>{' '}
                       {window
                         ? `${formatWindowRange(window)} · ${formatWindowLength(window, range)}`
-                        : 'None in this month'}
+                        : `None ${words.within}`}
                     </span>
                     <span className={styles.bestFact}>
-                      <span className={styles.bestLabel}>This month</span> Sun up{' '}
+                      <span className={styles.bestLabel}>{words.title}</span> Sun up{' '}
                       {formatShare(assessment.sky.sunPct)} · Earth up{' '}
                       {formatShare(assessment.sky.earthPct)}
                     </span>
@@ -312,7 +338,8 @@ export function PlanSidebar({
           onToggle={() => setNotSuitableOpen(!notSuitableOpen)}
         >
           <ul className={styles.list} data-tour="excluded">
-            {notSuitable.map(({ site, assessment }) => {
+            {notSuitable.map((entry) => {
+              const { site, assessment } = entry;
               const selected = site.id === selectedSiteId;
               return (
                 <li key={site.id} className={styles.item}>
@@ -336,6 +363,7 @@ export function PlanSidebar({
                     <span className={styles.needs}>
                       {formatNeedsMet(needsMet(assessment, mission), mission)}
                     </span>
+                    <span className={styles.hours}>{hoursText(entry)}</span>
                   </button>
                   {compareToggle(site.id, site.name)}
                 </li>

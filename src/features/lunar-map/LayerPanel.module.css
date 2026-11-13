@@ -1,0 +1,173 @@
+/* Map layers: a small floating panel beside the map's icon column. */
+.panel {
+  composes: panel from '../../styles/glass.module.css';
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(20rem, calc(100vw - 6rem));
+  max-height: calc(100% - 2 * var(--panel-gap));
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  font-size: var(--font-size-caption);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.layers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.toggle,
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toggle input,
+.choice input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.opacity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+.opacity input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.legend {
+  margin: 0;
+}
+
+.bar {
+  height: 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 2px;
+}
+
+.ticks {
+  position: relative;
+  height: 1.25rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.tick:first-child {
+  transform: none;
+}
+
+.tick:last-child {
+  transform: translateX(-100%);
+}
+
+.unit {
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
+}
+
+.active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.label {
+  width: 100%;
+  padding: 0;
+  color: var(--color-text-faint);
+}
+
+.readout {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-faint);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* A load failure, in words; the colour only echoes it. */
+.error {
+  margin: 0;
+  color: var(--color-score-poor);
+  line-height: 1.45;
+}

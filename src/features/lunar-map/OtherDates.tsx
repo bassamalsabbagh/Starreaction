@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Collapsible } from '../../components/Collapsible';
 import { assessSky, formatShare, type DemoMission } from '../../data/demoData';
+import { siteHourlySky, type HorizonsSeries } from '../../services/horizonsData';
 import type { LatLon } from '../../utils/lunarSky';
-import { hourlySky, sampledSpan, siteSky } from '../../utils/skyVisibility';
+import { sampledSpan, siteSky } from '../../utils/skyVisibility';
 import type { HorizonProfile } from '../../utils/terrainShadow';
 import {
   RANGE_MS,
@@ -20,6 +21,8 @@ interface OtherDatesProps {
   time: number;
   /** The place's terrain horizon, when known: the checks then count it (as everywhere else). */
   terrain?: HorizonProfile | null;
+  /** A fixed site's JPL Horizons positions (the engine where they have no data, and for points). */
+  series?: HorizonsSeries | null;
   /** Moves the app's time to a month's best window. */
   onGo: (ms: number) => void;
   /** A new number opens the list (the guided demo). */
@@ -39,6 +42,7 @@ export function OtherDates({
   mission,
   time,
   terrain = null,
+  series = null,
   onGo,
   revealSeq = 0,
 }: OtherDatesProps) {
@@ -53,10 +57,11 @@ export function OtherDates({
     if (!open) return [];
     return Array.from({ length: OTHER_DATES_MONTHS }, (_, index) => {
       const range = rangeAround(centre + index * RANGE_MS);
-      const sky = siteSky(hourlySky(sampledSpan(range)), place, mission, range, terrain);
+      const samples = siteHourlySky(series, place, sampledSpan(range)).samples;
+      const sky = siteSky(samples, place, mission, range, terrain);
       return { range, assessment: assessSky(sky, mission, range) };
     });
-  }, [open, centre, place, mission, terrain]);
+  }, [open, centre, place, mission, terrain, series]);
 
   return (
     <Collapsible

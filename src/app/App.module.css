@@ -386,3 +386,19 @@
 .inlineLink:hover {
   text-decoration-color: var(--color-text);
 }
+
+/* The map layers panel: beside the map's icon column, below the top row, above the time bar. */
+.layersLayer {
+  position: absolute;
+  top: calc(var(--top-bar-height) + var(--space-3));
+  right: calc(var(--map-inset-right) + var(--space-2));
+  bottom: calc(var(--bottom-stack) + var(--space-3));
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.layersLayer > * {
+  pointer-events: auto;
+}

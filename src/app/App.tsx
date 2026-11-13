@@ -20,9 +20,8 @@ import { TopBar } from '../components/TopBar';
 import {
   DEFAULT_DEMO_MISSION,
   DEMO_MISSIONS,
-  DEMO_SITES,
-  bestDemoSite,
-  rankDemoSites,
+  bestSite,
+  rankSites,
   type DemoMission,
   type SiteOrder,
 } from '../data/demoData';
@@ -34,6 +33,13 @@ import { DataCredits } from '../features/lunar-map/DataCredits';
 import { MapErrorBoundary } from '../features/lunar-map/MapErrorBoundary';
 import type { FlyRequest } from '../features/lunar-map/MoonGlobe';
 import type { ImageryStatus } from '../features/lunar-map/mapLabels';
+import { DateRangePicker } from '../features/missions/DateRangePicker';
+import {
+  dateRangeError,
+  dateRangeText,
+  toTimeRange,
+  type DateRange,
+} from '../features/missions/dateRange';
 import { MissionForm, type MissionPrefill } from '../features/missions/MissionForm';
 import { SlipAssistant } from '../features/missions/SlipAssistant';
 import type { SlipPlan } from '../features/missions/slipPlan';
@@ -49,8 +55,15 @@ import {
 import type { MapController } from '../features/lunar-map/cameraControls';
 import { PlaceReport } from '../features/lunar-map/PlaceReport';
 import { PlanSidebar } from '../features/lunar-map/PlanSidebar';
-import { useElevationGrid } from '../features/lunar-map/useElevationGrid';
-import type { ElevationLayer } from '../utils/elevationGrid';
+import { SiteFacts } from '../features/lunar-map/SiteFacts';
+import { YearFacts } from '../features/lunar-map/YearFacts';
+import { yearFacts } from '../features/lunar-map/yearFactValues';
+import { LayerPanel } from '../features/lunar-map/LayerPanel';
+import { layerDisplays, previewsOnly, unshadedBelowZ } from '../features/lunar-map/mapLayerState';
+import { useLayerReading } from '../features/lunar-map/useLayerReading';
+import { useMapLayerSettings } from '../features/lunar-map/useMapLayerSettings';
+import { ENGINE_LABEL, positionsLabel, positionsOf } from '../features/lunar-map/horizonsPositions';
+import { useHorizonsSeries } from '../features/lunar-map/useHorizonsSeries';
 import { StatusStrip } from '../features/time/StatusStrip';
 import { TimeBar } from '../features/time/TimeBar';
 import { TimeProvider } from '../features/time/TimeProvider';
@@ -60,12 +73,18 @@ import { DEMO_STEPS, type DemoAction } from '../features/tour/demoSteps';
 import { TOUR_STEPS } from '../features/tour/tourSteps';
 import { joinClassNames } from '../utils/classNames';
 import { hourlySky, sampledSpan, siteSky, type SiteSky } from '../utils/skyVisibility';
-import type { TimeRange, TimeWindowMs } from '../utils/time';
+import { rangeWords, type TimeRange, type TimeWindowMs } from '../utils/time';
 import { readShareHash, shareHash, type ShareState } from '../utils/shareLink';
 import type { LatLon } from '../utils/lunarSky';
 import { checkPoint, pointLabel } from '../data/pointCheck';
+import { siteHourlySky, type HorizonsSeries } from '../services/horizonsData';
+import { MAP_LAYERS, layerFileUrl, type MapLayer } from '../services/mapLayers';
+import { viewInHorizonsUrl } from '../services/horizonsQuery';
+import { SITES } from '../services/sites';
+import type { PositionSamples } from '../utils/riseSet';
 import { loadUiPrefs, saveUiPrefs } from '../utils/uiPrefs';
 import { APP_NAME, BRAND_NAME, DOCUMENT_TITLE, NON_ENDORSEMENT } from './appInfo';
+import { SLIP_ASSISTANT_ENABLED } from './featureFlags';
 import { useStableCallback } from './useStableCallback';
 import { useViewInsets } from './useViewInsets';
 import styles from './App.module.css';
@@ -104,10 +123,10 @@ const RAIL_ITEM: Record<LeftPanel, RailItem> = {
 const KEY_HINT_MS = 6_000;
 /** On entering presentation mode, "Esc to exit" shows for this long. */
 const EXIT_HINT_MS = 3_500;
-/** The spot the demo's "Anywhere on the Moon" step picks (made up, far from every demo site). */
+/** The spot the demo's "Anywhere on the Moon" step picks (made up, far from every landing site). */
 const DEMO_ANYWHERE_POINT: LatLon = { lat: -45, lon: -70 };
-/** The demo's south-polar site (step 7): the Sun skims the horizon there. */
-const DEMO_POLAR_SITE_ID = 'demo-site-india';
+/** The demo's south-polar site (step 7), IM-2 Athena (84.8° S): the Sun skims the horizon there. */
+const DEMO_POLAR_SITE_ID = 'im2';
 /** Under reduced motion the demo moves the time by this much instead of playing it. */
 const DEMO_TIME_STEP_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -128,6 +147,8 @@ interface DemoSnapshot {
   order: SiteOrder;
   /** The map camera's view (opaque), when the map had loaded. */
   cameraView: unknown;
+  /** The dates picked in the Mission view: the demo runs on the time bar's 29.5 days. */
+  dateRange: DateRange | null;
 }
 
 /** The compare panel holds at most this many sites. */
@@ -162,27 +183,46 @@ function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ['SELECT', 'TEXTAREA'].includes(target.tagName);
 }
 
+const NO_SERIES: ReadonlyMap<string, HorizonsSeries> = new Map();
+
 /**
- * Every site's real Sun and Earth shares and windows for a mission over a range. Hourly samples
- * are cached across ranges (skyVisibility), so a range that slid by a day only computes the new
- * day.
+ * Every site's real Sun and Earth shares, hours and windows for a mission over a range: from a
+ * site's JPL Horizons series where it covers the hour, from the engine elsewhere (docs/
+ * LANDER_RULES.md, "Sun and Earth positions: JPL Horizons"). Engine samples are cached across
+ * ranges (skyVisibility), so a range that slid by a day only computes the new day.
  */
-function skyBySite(range: TimeRange, mission: DemoMission): ReadonlyMap<string, SiteSky> {
-  const samples = hourlySky(sampledSpan(range));
+function skyBySite(
+  range: TimeRange,
+  mission: DemoMission,
+  series: ReadonlyMap<string, HorizonsSeries>,
+): ReadonlyMap<string, SiteSky> {
+  const span = sampledSpan(range);
   return new Map(
-    DEMO_SITES.map((site) => [
+    SITES.map((site) => [
       site.id,
-      siteSky(samples, site, mission, range, terrainProfileFor(site.id)),
+      siteSky(
+        siteHourlySky(series.get(site.id) ?? null, site, span).samples,
+        site,
+        mission,
+        range,
+        terrainProfileFor(site.id),
+      ),
     ]),
   );
 }
 
 const NO_WINDOWS: readonly TimeWindowMs[] = [];
+const NO_MAP_LAYERS: readonly MapLayer[] = [];
 
-/** The best site for a mission now: the first selection. */
+/** The best site for a mission now: the first selection (before any Horizons file has loaded). */
 function topSiteId(range: TimeRange, mission: DemoMission): string | null {
-  const sky = skyBySite(range, mission);
-  return bestDemoSite(rankDemoSites(DEMO_SITES, mission, sky, range))?.site.id ?? null;
+  const sky = skyBySite(range, mission, NO_SERIES);
+  return bestSite(rankSites(SITES, mission, sky, range))?.site.id ?? null;
+}
+
+/** 00:00 UTC on a "YYYY-MM-DD" date. */
+function dayStartUtc(date: string): number {
+  return Date.parse(`${date}T00:00:00Z`);
 }
 
 /** The app: one shared clock around the workspace. */
@@ -191,7 +231,7 @@ export function App() {
   const [shared] = useState(() =>
     readShareHash(typeof window === 'undefined' ? '' : window.location.hash, {
       missionIds: DEMO_MISSIONS.map((entry) => entry.id),
-      siteIds: DEMO_SITES.map((site) => site.id),
+      siteIds: SITES.map((site) => site.id),
     }),
   );
   useEffect(() => {
@@ -215,11 +255,11 @@ export function App() {
 }
 
 /**
- * The Moon fills the window. Over it float the top row (logo and breadcrumb; the DEMO pill), the
- * menu rail, one left panel at a time (Sites, a site or point, Mission, Lessons, Compare, the
- * mission form), the map's icon column on the right, the status line and the timeline. Missions
- * and sites are demo data (src/data/demoData.ts), labelled by the "Data: Demo" pill; the Sun and
- * Earth are real.
+ * The Moon fills the window. Over it float the top row (logo and breadcrumb), the menu rail, one
+ * left panel at a time (Sites, a site or point, Mission, Lessons, Compare, the mission form), the
+ * map's icon column on the right, the status line and the timeline. The sites are real landings
+ * (src/services/sites.ts) and the Sun and Earth are real; the missions are demo data
+ * (src/data/demoData.ts), labelled DEMO wherever their needs are shown.
  */
 function Workspace({ shared }: { shared: Partial<ShareState> }) {
   const {
@@ -252,13 +292,46 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
   const [hoveredSiteId, setHoveredSiteId] = useState<string | null>(null);
   const [flyRequest, setFlyRequest] = useState<FlyRequest | null>(null);
   const [showGrid, setShowGrid] = useState(false);
-  // The south-pole elevation data (none until a file is loaded) and the map layer drawn from it.
-  const elevation = useElevationGrid();
-  const [mapLayer, setMapLayer] = useState<ElevationLayer | null>(null);
-  const elevationLayer = useMemo(
-    () =>
-      mapLayer && elevation.status === 'ready' ? { layer: mapLayer, grid: elevation.grid } : null,
-    [mapLayer, elevation],
+  // The map layers (elevation, slope; docs/LANDER_RULES.md "Map layers"): switches, opacities,
+  // the layer readings come from, and the images the globe draws. Fixed in time.
+  const mapLayerList = MAP_LAYERS?.layers ?? NO_MAP_LAYERS;
+  const layerSettings = useMapLayerSettings(mapLayerList);
+  // Narrow or low-memory devices keep the 512 px previews only (about 300 MB decoded otherwise).
+  const [layerPreviewOnly] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : previewsOnly(
+          window.innerWidth,
+          (navigator as Navigator & { deviceMemory?: number }).deviceMemory,
+        ),
+  );
+  const mapLayerDisplays = useMemo(
+    () => layerDisplays(mapLayerList, layerSettings.settings, layerFileUrl, layerPreviewOnly),
+    [mapLayerList, layerSettings.settings, layerPreviewOnly],
+  );
+  // The globe's Sun-and-relief shading stops south of the layers' coverage while one is visible.
+  const layerShadeCutZ = unshadedBelowZ(mapLayerDisplays, MAP_LAYERS?.coverMaxLatDeg ?? -80);
+  // Layers some of whose images failed to load; switching one on again clears it (and retries).
+  const [layerFailures, setLayerFailures] = useState<readonly string[]>([]);
+  const toggleMapLayer = (layerId: string) => {
+    setLayerFailures((ids) => ids.filter((id) => id !== layerId));
+    layerSettings.toggle(layerId);
+  };
+  const reportLayerFailure = useStableCallback((layerId: string) =>
+    setLayerFailures((ids) => (ids.includes(layerId) ? ids : [...ids, layerId])),
+  );
+  const [layersOpen, setLayersOpen] = useState(false);
+  // The map layers' panel opens from the map's icon column.
+  const toggleLayersPanel = useStableCallback(() => setLayersOpen((open) => !open));
+  // The readout: the active layer's value under the pointer (desktop) or at the tapped spot.
+  const [hoverGround, setHoverGround] = useState<LatLon | null>(null);
+  // With every layer off, no hover point is kept (and no value tile is read).
+  if (!layerSettings.anyVisible && hoverGround !== null) setHoverGround(null);
+  const activeLayer = mapLayerList.find((layer) => layer.id === layerSettings.activeId) ?? null;
+  // A tap (the picked point) gives the reading on touch screens, where there is no hover.
+  const layerReading = useLayerReading(
+    activeLayer,
+    hoverGround ?? (layerSettings.anyVisible ? pickedPoint : null),
   );
   const [imageryStatus, setImageryStatus] = useState<ImageryStatus>('loading');
   const [prefs] = useState(loadUiPrefs);
@@ -370,19 +443,61 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     [savedMissions, sessionMissions],
   );
   const mission = allMissions.find((entry) => entry.id === missionId) ?? DEFAULT_DEMO_MISSION;
+  // The fixed sites' JPL Horizons positions: empty until they load (the engine meanwhile).
+  const { series: horizons, settled: horizonsSettled } = useHorizonsSeries();
+  const positions = useMemo(
+    () => new Map([...horizons].map(([id, series]) => [id, positionsOf(series)])),
+    [horizons],
+  );
+  const positionsFor = useCallback(
+    (siteId: string): PositionSamples | null => positions.get(siteId) ?? null,
+    [positions],
+  );
+  // Light, water and Earth over the year per site (Earth from the Horizons series once loaded).
+  const yearFactsBySite = useMemo(
+    () =>
+      new Map(
+        SITES.map((site) => [
+          site.id,
+          yearFacts(
+            site,
+            horizons.get(site.id) ?? null,
+            terrainProfileFor(site.id),
+            horizonsSettled,
+          ),
+        ]),
+      ),
+    [horizons, horizonsSettled],
+  );
+  // The Timeline's per-site positions and terrain (stable, so its bars are worked out once).
+  const seriesFor = useCallback((siteId: string) => horizons.get(siteId) ?? null, [horizons]);
+  const terrainFor = useCallback((siteId: string) => terrainProfileFor(siteId), []);
+  const yearFactsFor = useCallback(
+    (siteId: string) => yearFactsBySite.get(siteId) ?? [],
+    [yearFactsBySite],
+  );
+  // The dates picked in the Mission view; without them the checks use the time bar's 29.5 days.
+  const [dateRange, setDateRangeState] = useState<DateRange | null>(() =>
+    shared.dates && dateRangeError(shared.dates) === null ? shared.dates : null,
+  );
+  const pickedRange = useMemo(() => (dateRange ? toTimeRange(dateRange) : null), [dateRange]);
+  const checkRange = pickedRange ?? range;
   // Computed when the range (a day at a time), the mission or the sites change; not per tick. It
   // is deferred, so during playback the clock and the light never wait for the checks.
-  const skyRange = useDeferredValue(range);
-  const sky = useMemo(() => skyBySite(skyRange, mission), [skyRange, mission]);
+  const skyRange = useDeferredValue(checkRange);
+  const sky = useMemo(() => skyBySite(skyRange, mission, horizons), [skyRange, mission, horizons]);
   const rankedSites = useMemo(
-    () => rankDemoSites(DEMO_SITES, mission, sky, skyRange, order),
+    () => rankSites(SITES, mission, sky, skyRange, order),
     [mission, sky, skyRange, order],
   );
   const selectedSite = rankedSites.find((entry) => entry.site.id === selectedSiteId) ?? null;
   // The assistant's fixed sentence after Apply, from the same checks as the Sites list.
   const slipResults = useMemo(
-    () => ({ text: slipSummary(rankedSites, mission, skyRange), updating: skyRange !== range }),
-    [rankedSites, mission, skyRange, range],
+    () => ({
+      text: slipSummary(rankedSites, mission, skyRange),
+      updating: skyRange !== checkRange,
+    }),
+    [rankedSites, mission, skyRange, checkRange],
   );
   const pointCheck = useMemo(
     () =>
@@ -392,7 +507,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     [pickedPoint, mission, skyRange],
   );
   // The best site is the longest usable window, whatever order the list is in.
-  const best = bestDemoSite(rankedSites);
+  const best = bestSite(rankedSites);
   // The time bar shows the windows of the picked point or the selected site; with neither, the
   // best site's, and says so.
   const timelineWindows: readonly TimeWindowMs[] = pointCheck
@@ -621,6 +736,12 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     setTour({ open: true, step: 0, mode: 'tour' });
   };
 
+  // Picked dates move the app's time to their start, so the time bar shows the range's first days.
+  const setDateRange = (next: DateRange | null) => {
+    setDateRangeState(next);
+    if (next) setTime(next.startMs);
+  };
+
   // Like a map app: choosing a site opens its card in the left panel.
   const selectSite = (siteId: string) => {
     setSelectedSiteId(siteId);
@@ -631,6 +752,8 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
   // A click on bare ground: that spot's card, in place of any selected site. No flight: the user
   // is already looking at it.
   const pickPoint = (point: LatLon) => {
+    // A tap gives the layers' reading at the spot, not where a one-finger pan last moved.
+    setHoverGround(null);
     setPickedPoint(point);
     setSelectedSiteId(null);
     setLeftPanel('point');
@@ -696,6 +819,15 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     setMissionPrefill(null);
     openPanel('addMission');
   };
+  // "See it in the tool" (Lessons): that site at its landing date, with the time bar's range
+  // (picked dates cleared) around it, so the range covers the landing.
+  const seeLanding = (siteId: string) => {
+    const site = SITES.find((entry) => entry.id === siteId);
+    if (!site) return;
+    setDateRangeState(null);
+    setTime(dayStartUtc(site.landingDateUtc));
+    selectSite(siteId);
+  };
   // "Go there" on the assistant's answer: that mission, the site's card and the window's start.
   const goToAnswer = (answerMissionId: string, siteId: string, ms: number) => {
     setMissionId(answerMissionId);
@@ -718,6 +850,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
       setMissionId(plan.mission.mission.id);
     }
     if (plan.time) setTime(plan.time.to);
+    if (plan.range) setDateRange(plan.range.range);
   };
   // Edit, or "Add its details" for a mission not in the list: the form, filled in.
   const editSlip = (plan: SlipPlan) => {
@@ -767,7 +900,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
         return;
       case 'bestSite': {
         // Like choosing it in the list, but nothing is saved as the user's panel choice.
-        const first = bestDemoSite(rankedSites);
+        const first = bestSite(rankedSites);
         if (first) showComparedSite(first.site.id);
         if (roomy) setLeftPanel('site');
         return;
@@ -796,7 +929,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
         if (roomy) setLeftPanel('site');
         return;
       case 'anywhere':
-        // A spot away from every demo site, so the answer is plainly the sky's, not a site's. Back
+        // A spot away from every landing site, so the answer is plainly the sky's, not a site's. Back
         // to the whole Moon first: after the tilted south-pole step the spot would be off-screen.
         mapControllerRef.current?.showWholeMoon();
         setPickedPoint(DEMO_ANYWHERE_POINT);
@@ -837,7 +970,9 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
       timeBarFolded,
       order,
       cameraView: mapControllerRef.current?.saveView(),
+      dateRange,
     };
+    setDateRangeState(null);
     // Started from the first-run tour: the tour counts as seen.
     if (tour.open && tour.mode === 'tour') saveUiPrefs({ tourDone: true });
     // The demo's captions speak of the list best first.
@@ -885,6 +1020,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     setPanelOpenState(saved.leftPanel !== null);
     setTimeBarFolded(saved.timeBarFolded);
     setOrder(saved.order);
+    setDateRangeState(saved.dateRange);
     setSpeed(saved.speed);
     if (saved.live) goLive();
     else setTime(saved.time);
@@ -911,6 +1047,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     const custom = mission.custom === true;
     const hash = shareHash({
       missionId: custom ? DEFAULT_DEMO_MISSION.id : mission.id,
+      dates: dateRange,
       siteId: selectedSiteId,
       point: pickedPoint,
       time,
@@ -979,7 +1116,6 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
         <TopBar
           brand={BRAND_NAME}
           product={APP_NAME}
-          onOpenAbout={openAbout}
           breadcrumb={
             <Breadcrumb
               missionName={mission.name}
@@ -1034,14 +1170,27 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
               compareOpen={compareShown}
               onToggleComparePanel={() => (compareOpen ? closeCompare() : openCompare())}
               comparePanelId={comparePanelId}
+              rangeText={dateRange ? dateRangeText(dateRange) : null}
             />
           </div>
           <div className={styles.view} hidden={panelView !== 'site'} data-panel-view="site">
             {selectedSite ? (
               <PlaceReport
                 heading="Site details"
+                kind="site"
                 name={selectedSite.site.name}
-                meta={`${pointLabel(selectedSite.site)} · DEMO site`}
+                meta={
+                  selectedSite.site.region
+                    ? `Landing site · ${selectedSite.site.region}`
+                    : 'Landing site'
+                }
+                facts={
+                  <>
+                    <YearFacts facts={yearFactsFor(selectedSite.site.id)} />
+                    <SiteFacts site={selectedSite.site} />
+                  </>
+                }
+                landerId={selectedSite.site.landerId}
                 rank={selectedSite.rank}
                 place={selectedSite.site}
                 assessment={selectedSite.assessment}
@@ -1049,7 +1198,15 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 time={time}
                 range={skyRange}
                 terrain={terrainProfileFor(selectedSite.site.id)}
-                elevation={elevation}
+                series={horizons.get(selectedSite.site.id) ?? null}
+                positionsLabel={positionsLabel(
+                  horizons.get(selectedSite.site.id) ?? null,
+                  skyRange,
+                )}
+                horizonsLinks={{
+                  sun: viewInHorizonsUrl('sun', selectedSite.site, skyRange),
+                  earth: viewInHorizonsUrl('earth', selectedSite.site, skyRange),
+                }}
                 onSetTime={setTime}
                 revealOtherDates={otherDatesReveal}
                 compare={{
@@ -1066,11 +1223,12 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
             {pointCheck ? (
               <PlaceReport
                 heading="Anywhere on the Moon"
+                kind="point"
                 name={pointLabel(pointCheck.point)}
                 meta={
                   pointCheck.nearest ? (
                     <>
-                      Nearest demo site:{' '}
+                      Nearest landing site:{' '}
                       <button
                         type="button"
                         className={styles.inlineLink}
@@ -1093,7 +1251,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 time={time}
                 range={skyRange}
                 terrain={null}
-                elevation={elevation}
+                positionsLabel={ENGINE_LABEL}
                 onSetTime={setTime}
                 revealOtherDates={otherDatesReveal}
                 share={{ onShare: () => void shareView(), note: shareNote }}
@@ -1111,22 +1269,27 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 missionFormOpen={missionFormOpen}
                 selectRef={missionSelectRef}
               />
-              <SlipAssistant
-                missions={allMissions}
-                mission={mission}
-                time={time}
-                range={range}
-                sites={DEMO_SITES}
-                onGoToSite={goToAnswer}
-                onApply={applySlip}
-                onEdit={editSlip}
-                onOpenForm={openMissionForm}
-                results={slipResults}
-              />
+              <DateRangePicker value={dateRange} onChange={setDateRange} />
+              {SLIP_ASSISTANT_ENABLED ? (
+                <SlipAssistant
+                  missions={allMissions}
+                  mission={mission}
+                  time={time}
+                  range={checkRange}
+                  rangeName={dateRange ? 'the dates you picked' : undefined}
+                  series={horizons}
+                  sites={SITES}
+                  onGoToSite={goToAnswer}
+                  onApply={applySlip}
+                  onEdit={editSlip}
+                  onOpenForm={openMissionForm}
+                  results={slipResults}
+                />
+              ) : null}
             </PanelView>
           </div>
           <div className={styles.view} hidden={panelView !== 'lessons'} data-panel-view="lessons">
-            <LessonsView />
+            <LessonsView onSeeInTool={seeLanding} />
           </div>
           <div className={styles.view} hidden={panelView !== 'compare'} data-panel-view="compare">
             <ComparePanel
@@ -1140,6 +1303,15 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
               onClear={() => setCompareIds([])}
               onClose={closeCompare}
               onSelectSite={showComparedSite}
+              positionsFor={positionsFor}
+              yearFactsFor={yearFactsFor}
+              timeline={{
+                seriesFor,
+                terrainFor,
+                range: checkRange,
+                picked: dateRange !== null,
+                onMove: setDateRange,
+              }}
             />
           </div>
           <div
@@ -1178,9 +1350,12 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 onPickPoint={pickPointFromMap}
                 showGrid={showGrid}
                 onShowGridChange={setShowGrid}
-                elevationLayer={elevationLayer}
-                elevationAvailable={elevation.status === 'ready'}
-                onElevationLayerChange={setMapLayer}
+                mapLayers={mapLayerDisplays}
+                onToggleLayers={mapLayerList.length > 0 ? toggleLayersPanel : undefined}
+                layersOpen={layersOpen}
+                onHoverGround={layerSettings.anyVisible ? setHoverGround : undefined}
+                layerShadeCutZ={layerShadeCutZ}
+                onLayerImagesFailed={reportLayerFailure}
                 imageryStatus={imageryStatus}
                 onImageryStatusChange={setImageryStatus}
                 viewInsets={viewInsets}
@@ -1192,9 +1367,28 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 idleDrift={!(tour.open && tour.mode === 'demo')}
                 onPresent={presentFromMap}
                 getCoveredLeft={coveredLeft}
+                missionWords={mission.custom ? 'this mission' : 'this DEMO mission'}
               />
             </Suspense>
           </MapErrorBoundary>
+
+          {layersOpen && !presenting ? (
+            <div className={styles.layersLayer}>
+              <LayerPanel
+                layers={mapLayerList}
+                settings={layerSettings.settings}
+                onToggle={toggleMapLayer}
+                onOpacity={layerSettings.setOpacity}
+                activeId={layerSettings.activeId}
+                onActive={layerSettings.setActive}
+                reading={layerReading}
+                onClose={() => setLayersOpen(false)}
+                sourceId={MAP_LAYERS?.sourceId ?? ''}
+                previewOnly={layerPreviewOnly}
+                failedIds={layerFailures}
+              />
+            </div>
+          ) : null}
 
           {/* The demo's caption bar: in the map's free middle, above the time bar. */}
           <div ref={setCaptionHost} className={styles.middleCaption} />
@@ -1214,22 +1408,22 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 <span className={styles.presentName}>{selectedSite.site.name}</span>
                 <span className={styles.presentScore}>
                   {selectedSite.assessment.suitable
-                    ? 'Power and comms OK this month'
-                    : 'Not suitable for this mission this month'}
+                    ? `Power and comms OK ${rangeWords(skyRange).now}`
+                    : `Not suitable for this mission ${rangeWords(skyRange).now}`}
                 </span>
-                {/* The DEMO pill is hidden in presentation mode: the label carries it. */}
-                <span className={styles.presentDemo}>DEMO</span>
+                {/* The verdict is for the mission's needs: a demo mission's are made up. */}
+                {mission.custom ? null : <span className={styles.presentDemo}>DEMO mission</span>}
               </p>
             ) : pointCheck && pickedPoint ? (
               <p className={styles.presentLabel} data-testid="present-label">
                 <span className={styles.presentName}>Your point {pointLabel(pickedPoint)}</span>
                 <span className={styles.presentScore}>
                   {pointCheck.assessment.suitable
-                    ? 'Power and comms OK this month'
-                    : 'Not suitable for this mission this month'}
+                    ? `Power and comms OK ${rangeWords(skyRange).now}`
+                    : `Not suitable for this mission ${rangeWords(skyRange).now}`}
                 </span>
-                {/* The DEMO pill is hidden in presentation mode: the label carries it. */}
-                <span className={styles.presentDemo}>DEMO</span>
+                {/* The verdict is for the mission's needs: a demo mission's are made up. */}
+                {mission.custom ? null : <span className={styles.presentDemo}>DEMO mission</span>}
               </p>
             ) : null}
           </div>
@@ -1257,6 +1451,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                   selectedSite?.site ??
                   (pickedPoint ? { name: 'Your point', ...pickedPoint } : null)
                 }
+                positions={selectedSite ? positionsFor(selectedSite.site.id) : null}
               />
             </div>
             <TimeBar
@@ -1292,6 +1487,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
           credits={<DataCredits imageryStatus={imageryStatus} />}
           nonEndorsement={NON_ENDORSEMENT}
           appName={APP_NAME}
+          slipAssistant={SLIP_ASSISTANT_ENABLED}
         />
       ) : null}
 
@@ -1308,7 +1504,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
             onInterrupt={() => endDemo(false)}
             onPauseChange={pauseGuided}
             // The next step waits for the camera to settle and the checks to catch up.
-            ready={!mapMoving && skyRange === range}
+            ready={!mapMoving && skyRange === checkRange}
             captionHost={captionHost}
             label="Demo"
             tag="DEMO"

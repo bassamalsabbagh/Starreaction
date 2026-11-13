@@ -177,6 +177,27 @@
   color: var(--color-text-muted);
 }
 
+/* Where the Sun and Earth positions came from, and "View in JPL Horizons". */
+.positions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-top: calc(var(--space-2) * -1);
+}
+
+.positionsLabel,
+.positionsLinks {
+  margin: 0;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-caption);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.positionsLinks a {
+  color: var(--color-text-muted);
+}
+
 /* The month's numbers. */
 .facts {
   display: grid;
@@ -247,6 +268,14 @@
 
 .checkDetail {
   color: var(--color-text-faint);
+  text-wrap: pretty;
+}
+
+/* Under Comms: what Earth in view does and does not promise, across the whole row. */
+.checkNote {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  line-height: 1.45;
   text-wrap: pretty;
 }
 

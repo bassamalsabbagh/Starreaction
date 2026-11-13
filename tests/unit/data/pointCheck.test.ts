@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DEMO_MISSION, DEMO_MISSIONS, DEMO_SITES } from '../../../src/data/demoData';
+import { DEFAULT_DEMO_MISSION, DEMO_MISSIONS } from '../../../src/data/demoData';
 import { checkPoint, nearestSite, pointLabel } from '../../../src/data/pointCheck';
+import { SITES, findSite } from '../../../src/services/sites';
 import { hourlySky, sampledSpan, siteSky } from '../../../src/utils/skyVisibility';
 import { dayCentre, rangeAround } from '../../../src/utils/time';
 
@@ -16,14 +17,21 @@ describe('pointLabel', () => {
 });
 
 describe('nearestSite', () => {
-  it('finds the closest demo site and its distance, 0 km at the site itself', () => {
-    const alpha = DEMO_SITES[0];
-    if (!alpha) throw new Error('no sites');
-    expect(nearestSite({ lat: alpha.lat, lon: alpha.lon })).toEqual({ site: alpha, distanceKm: 0 });
+  it('finds the closest real landing site and its distance, 0 km at the site itself', () => {
+    const odysseus = SITES[0];
+    if (!odysseus) throw new Error('no sites');
+    expect(nearestSite({ lat: odysseus.lat, lon: odysseus.lon })).toEqual({
+      site: odysseus,
+      distanceKm: 0,
+    });
     // A degree of latitude on the Moon is about 30 km.
-    const near = nearestSite({ lat: alpha.lat + 1, lon: alpha.lon });
-    expect(near?.site).toBe(alpha);
+    const near = nearestSite({ lat: odysseus.lat + 1, lon: odysseus.lon });
+    expect(near?.site).toBe(odysseus);
     expect(near?.distanceKm).toBe(30);
+  });
+
+  it('searches the real sites by default: Mare Crisium is nearest to 20° N, 40° E', () => {
+    expect(nearestSite({ lat: 20.25, lon: 40.5 })?.site).toBe(findSite('bg1'));
   });
 
   it('is null with no sites', () => {
@@ -32,12 +40,12 @@ describe('nearestSite', () => {
 });
 
 describe('checkPoint', () => {
-  it('gives a point on a demo site the same sky as the site', () => {
-    const alpha = DEMO_SITES[0];
-    if (!alpha) throw new Error('no sites');
-    const result = checkPoint(alpha, DEFAULT_DEMO_MISSION, SAMPLES, RANGE);
-    expect(result.assessment.sky).toEqual(siteSky(SAMPLES, alpha, DEFAULT_DEMO_MISSION, RANGE));
-    expect(result.nearest?.site).toBe(alpha);
+  it('gives a point on a site the same sky as the site', () => {
+    const odysseus = SITES[0];
+    if (!odysseus) throw new Error('no sites');
+    const result = checkPoint(odysseus, DEFAULT_DEMO_MISSION, SAMPLES, RANGE);
+    expect(result.assessment.sky).toEqual(siteSky(SAMPLES, odysseus, DEFAULT_DEMO_MISSION, RANGE));
+    expect(result.nearest?.site).toBe(odysseus);
   });
 
   it('passes on the near side for Mission A, with a best window', () => {

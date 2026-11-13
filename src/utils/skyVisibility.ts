@@ -38,6 +38,12 @@ export interface SiteSky {
   sunPct: number;
   /** Share of the range with the Earth at or above the minimum, 0–100. */
   earthPct: number;
+  /** Hours in the range with the Sun up: one per hourly sample ("Date range and hours"). */
+  sunHours: number;
+  /** Hours in the range with the Earth up. */
+  earthHours: number;
+  /** Hours in the range with the Sun and the Earth both up at once. */
+  bothHours: number;
   /** The longest continuous run of hours with the Sun up inside the range, in days. */
   longestSunlitDays: number;
   /** The longest continuous run of window hours (the rule below) inside the range, in days. */
@@ -176,7 +182,25 @@ export function sampledSpan(range: TimeRange): TimeRange {
 }
 
 /**
- * Sun and Earth shares and the longest sunlit and window stretches (over `range` only), and windows
+ * The checks' "up" test for a body seen from a site: at or above the minimum height and, with a
+ * terrain horizon, above the terrain in its direction (docs/LANDER_RULES.md, "Terrain horizon").
+ * Every check, share, hour and the Timeline use this one test.
+ */
+export function upTest(
+  site: LatLon,
+  terrain: HorizonProfile | null = null,
+): (target: LunarSky['sun'], minElevationDeg: number) => boolean {
+  const aboveSmooth = aboveHorizonTest(site);
+  return (target, minElevationDeg) => {
+    if (!aboveSmooth(target, minElevationDeg)) return false;
+    if (!terrain) return true;
+    const { azimuth, elevation } = azimuthElevationOf(target, site);
+    return elevation >= horizonAt(terrain, azimuth);
+  };
+}
+
+/**
+ * Sun and Earth shares and hours and the longest sunlit and window stretches (over `range` only), and windows
  * (over all the samples, so they are not cut at the range's edges) for one site. With a terrain
  * horizon, a body is up only when it is above both the minimum and the terrain in its direction
  * (docs/LANDER_RULES.md, "Terrain horizon").
@@ -188,16 +212,11 @@ export function siteSky(
   range: TimeRange,
   terrain: HorizonProfile | null = null,
 ): SiteSky {
-  const aboveSmooth = aboveHorizonTest(site);
-  const above = (target: LunarSky['sun'], minElevationDeg: number): boolean => {
-    if (!aboveSmooth(target, minElevationDeg)) return false;
-    if (!terrain) return true;
-    const { azimuth, elevation } = azimuthElevationOf(target, site);
-    return elevation >= horizonAt(terrain, azimuth);
-  };
+  const above = upTest(site, terrain);
   let inRange = 0;
   let sunUp = 0;
   let earthUp = 0;
+  let bothUp = 0;
   const sunInRange: boolean[] = [];
   const windowInRange: boolean[] = [];
   const windowHours = samples.map((sample) => {
@@ -208,6 +227,7 @@ export function siteSky(
       inRange += 1;
       if (sun) sunUp += 1;
       if (earth) earthUp += 1;
+      if (sun && earth) bothUp += 1;
       sunInRange.push(sun);
       windowInRange.push(window);
     }
@@ -217,6 +237,9 @@ export function siteSky(
   return {
     sunPct: inRange ? (sunUp / inRange) * 100 : 0,
     earthPct: inRange ? (earthUp / inRange) * 100 : 0,
+    sunHours: sunUp,
+    earthHours: earthUp,
+    bothHours: bothUp,
     longestSunlitDays: (longestRun(sunInRange) * HOUR_MS) / DAY_MS,
     longestWindowDays: (longestRun(windowInRange) * HOUR_MS) / DAY_MS,
     windows: mergeRuns(

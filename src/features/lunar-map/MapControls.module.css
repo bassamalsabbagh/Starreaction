@@ -61,13 +61,3 @@
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   color: var(--color-accent);
 }
-
-/* Not usable yet (no elevation data): dimmed, the tooltip says why. */
-.buttonUnavailable,
-.buttonUnavailable:hover,
-.buttonUnavailable:active {
-  background: transparent;
-  color: var(--color-text-faint);
-  opacity: 0.5;
-  cursor: not-allowed;
-}

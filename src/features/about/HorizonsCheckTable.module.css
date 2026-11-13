@@ -1,0 +1,76 @@
+/* "Checked against JPL Horizons": three compact tables, each with its caption, results in words. */
+.check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.caption {
+  padding-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  text-align: left;
+  text-wrap: pretty;
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--color-text-faint);
+  font-weight: 600;
+}
+
+.table td {
+  color: var(--color-text);
+}
+
+.sub {
+  display: block;
+  color: var(--color-text-faint);
+}
+
+.result {
+  font-weight: 600;
+}
+
+.pass {
+  color: var(--color-score-great);
+}
+
+.fail {
+  color: var(--color-score-poor);
+}

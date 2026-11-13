@@ -118,15 +118,34 @@ export function formatWindowDays(window: TimeWindowMs): string {
   return window.openStart || window.openEnd ? `over ${days}` : days;
 }
 
+/** Whole calendar months later (or earlier), the day kept or moved to the month's last day. */
+export function addMonthsUtc(ms: number, months: number): number {
+  const date = new Date(ms);
+  const total = date.getUTCFullYear() * 12 + date.getUTCMonth() + months;
+  const year = Math.floor(total / 12);
+  const month = total - year * 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return Date.UTC(
+    year,
+    month,
+    Math.min(date.getUTCDate(), lastDay),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds(),
+    date.getUTCMilliseconds(),
+  );
+}
+
 /** How much of a window falls inside a range, ms (0 when they don't overlap). */
 export function insideRangeMs(window: TimeWindowMs, range: TimeRange): number {
   return Math.max(0, Math.min(window.end, range.end) - Math.max(window.start, range.start));
 }
 
 /**
- * A window's whole length, plus the part inside the checked month when the window runs past it:
- * "12.9 days (10.2 days in this month)". The checks and the Sites list use the part inside the
- * month, so whenever the two would read differently both are shown.
+ * A window's whole length, plus the part inside the checked range when the window runs past it:
+ * "12.9 days (10.2 days in this month)", or "in these dates" for picked dates. The checks and the
+ * Sites list use the part inside the range, so whenever the two would read differently both are
+ * shown.
  */
 export function formatWindowLength(window: TimeWindowMs, range: TimeRange): string {
   const whole = formatWindowDays(window);
@@ -134,7 +153,7 @@ export function formatWindowLength(window: TimeWindowMs, range: TimeRange): stri
   const insideDays = tenthsOfDayDown(inside / DAY_MS);
   return inside < window.end - window.start &&
     insideDays !== tenthsOfDayDown((window.end - window.start) / DAY_MS)
-    ? `${whole} (${insideDays} days in this month)`
+    ? `${whole} (${insideDays} days ${rangeWords(range).within})`
     : whole;
 }
 
@@ -157,9 +176,38 @@ export function formatDuration(ms: number): string {
   return 'under 1m';
 }
 
+/** The forecasts' countdown, units spaced: "2 d 4 h", "5 h 12 m", "12 m"; "under 1 m". */
+export function formatCountdown(ms: number): string {
+  return formatDuration(ms).replace(/(\d)([dhm])\b/g, '$1 $2');
+}
+
 export interface TimeRange {
   start: number;
   end: number;
+}
+
+/** How copy names a range: the time bar's 29.5 days is "this month"; picked dates are not. */
+export interface RangeWords {
+  /** "this month" / "in these dates": "usable this month", "Longest night this month". */
+  readonly now: string;
+  /** "in this month" / "in these dates": "None in this month". */
+  readonly within: string;
+  /** "of the month" / "of these dates": "62% of the month". */
+  readonly of: string;
+  /** "This month" / "These dates": a heading. */
+  readonly title: string;
+}
+
+/** The words for a range, so copy never calls picked dates "this month". */
+export function rangeWords(range: TimeRange): RangeWords {
+  return Math.abs(range.end - range.start - RANGE_MS) < 1
+    ? { now: 'this month', within: 'in this month', of: 'of the month', title: 'This month' }
+    : {
+        now: 'in these dates',
+        within: 'in these dates',
+        of: 'of these dates',
+        title: 'These dates',
+      };
 }
 
 /**
