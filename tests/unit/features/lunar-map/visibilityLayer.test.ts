@@ -5,16 +5,17 @@ import {
   IDLE_RUNTIME,
   INITIAL_VISIBILITY,
   NO_FRAME_TEXT,
+  applyVisibilityDisplay,
   createFrameRequester,
   formatFrameTime,
   frameLine,
   frameStamp,
   isAbortError,
+  raiseOverlayToTop,
   readingSource,
   shownTargets,
   snapToFrame,
   visibilityDisplay,
-  visibilityLegendStops,
   visibilityReadout,
   type VisibilityRuntime,
 } from '../../../../src/features/lunar-map/visibilityLayer';
@@ -56,10 +57,11 @@ describe('snapToFrame', () => {
 });
 
 describe('settings and display', () => {
-  it('starts with the Sun on and the Earth off, and nothing loading', () => {
+  it('starts with the Sun as the one overlay, and nothing loading', () => {
     expect(INITIAL_VISIBILITY.on).toBe(false);
     expect(shownTargets(INITIAL_VISIBILITY)).toEqual([]);
     expect(shownTargets({ ...INITIAL_VISIBILITY, on: true })).toEqual(['sun']);
+    expect(shownTargets({ ...INITIAL_VISIBILITY, on: true, active: 'earth' })).toEqual(['earth']);
     expect(visibilityDisplay(INITIAL_VISIBILITY, '2026-11-24T00:00:00Z').load).toBe(false);
   });
 
@@ -164,16 +166,87 @@ describe('readingSource', () => {
   });
 });
 
-describe('visibilityLegendStops', () => {
-  it('turns the manifest colours into sorted 0–1 stops', () => {
-    expect(
-      visibilityLegendStops({ '1': '#ff5b18', '0': '#081246', '0.5': '#00cdaf', x: '#000' }),
-    ).toEqual([
-      { value: 0, color: '#081246' },
-      { value: 0.5, color: '#00cdaf' },
-      { value: 1, color: '#ff5b18' },
+describe('applyVisibilityDisplay', () => {
+  const settings = { ...INITIAL_VISIBILITY, on: true, started: true };
+  function run(display: ReturnType<typeof visibilityDisplay>) {
+    const controller = { setVisible: vi.fn(), setOpacity: vi.fn() };
+    const requester = { request: vi.fn(), stop: vi.fn() };
+    applyVisibilityDisplay(controller, requester, display);
+    return { controller, requester };
+  }
+
+  it('shows the chosen overlay and hides the other, each at its own opacity', () => {
+    const sun = run(
+      visibilityDisplay(
+        { ...settings, opacity: { sun: 0.6, earth: 0.35 } },
+        '2026-11-24T00:00:00Z',
+      ),
+    );
+    expect(sun.controller.setVisible.mock.calls).toEqual([
+      ['sun', true],
+      ['earth', false],
     ]);
-    expect(visibilityLegendStops(null)).toEqual([]);
+    expect(sun.controller.setOpacity.mock.calls).toEqual([
+      ['sun', 0.6],
+      ['earth', 0.35],
+    ]);
+    expect(sun.requester.request).toHaveBeenCalledWith('2026-11-24T00:00:00Z');
+
+    // Switching to the Earth: the Sun hides, and both opacities are kept as they were.
+    const earth = run(
+      visibilityDisplay(
+        { ...settings, active: 'earth', opacity: { sun: 0.6, earth: 0.35 } },
+        '2026-11-24T00:00:00Z',
+      ),
+    );
+    expect(earth.controller.setVisible.mock.calls).toEqual([
+      ['sun', false],
+      ['earth', true],
+    ]);
+    expect(earth.controller.setOpacity.mock.calls).toEqual([
+      ['sun', 0.6],
+      ['earth', 0.35],
+    ]);
+  });
+
+  it('hides both and asks for nothing without a frame', () => {
+    const none = run(visibilityDisplay(settings, null));
+    expect(none.controller.setVisible.mock.calls).toEqual([
+      ['sun', false],
+      ['earth', false],
+    ]);
+    expect(none.requester.request).not.toHaveBeenCalled();
+  });
+});
+
+describe('raiseOverlayToTop', () => {
+  /** A stand-in for Cesium's ImageryLayerCollection: first is drawn lowest. */
+  function stack(names: string[]) {
+    const order = [...names];
+    return {
+      order,
+      contains: (layer: string) => order.includes(layer),
+      raiseToTop: (layer: string) => {
+        order.splice(order.indexOf(layer), 1);
+        order.push(layer);
+      },
+    };
+  }
+
+  it('puts the overlay above elevation and slope, whatever came first', () => {
+    // A frame applied before slope was switched on, then slope raised itself to the top.
+    const layers = stack(['basemap', 'sun-frame', 'earth-frame', 'elevation', 'slope']);
+    raiseOverlayToTop(layers, ['sun-frame', 'earth-frame']);
+    expect(layers.order).toEqual(['basemap', 'elevation', 'slope', 'sun-frame', 'earth-frame']);
+    // Running it again changes nothing.
+    raiseOverlayToTop(layers, ['sun-frame', 'earth-frame']);
+    expect(layers.order).toEqual(['basemap', 'elevation', 'slope', 'sun-frame', 'earth-frame']);
+  });
+
+  it('skips layers that are missing or already removed', () => {
+    const layers = stack(['basemap', 'sun-frame', 'slope']);
+    raiseOverlayToTop(layers, [undefined, 'old-frame', 'sun-frame']);
+    expect(layers.order).toEqual(['basemap', 'slope', 'sun-frame']);
   });
 });
 

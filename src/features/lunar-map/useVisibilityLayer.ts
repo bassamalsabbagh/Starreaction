@@ -43,15 +43,15 @@ export function useVisibilityLayer(time: number) {
     if (runtime.status === 'unavailable') return;
     const on = !settings.on;
     setSettings((current) => ({ ...current, on, started: current.started || on }));
-    if (on) setPrefer(shownTargets({ ...settings, on })[0] ?? null);
+    if (on) setPrefer(settings.active);
   };
-  const toggleTarget = (target: VisibilityTarget) => {
-    const visible = !settings[target].visible;
-    setSettings((current) => ({ ...current, [target]: { ...current[target], visible } }));
-    if (visible) setPrefer(target);
+  /** One overlay at a time: choosing one shows it and hides the other; each keeps its opacity. */
+  const choose = (target: VisibilityTarget) => {
+    setSettings((current) => ({ ...current, active: target }));
+    setPrefer(target);
   };
   const setOpacity = (target: VisibilityTarget, opacity: number) =>
-    setSettings((current) => ({ ...current, [target]: { ...current[target], opacity } }));
+    setSettings((current) => ({ ...current, opacity: { ...current.opacity, [target]: opacity } }));
 
   const readAt = (target: VisibilityTarget, point: LatLon | null): VisibilityReadout =>
     visibilityReadout({
@@ -69,7 +69,7 @@ export function useVisibilityLayer(time: number) {
     shown,
     prefer,
     toggle,
-    toggleTarget,
+    choose,
     setOpacity,
     setPrefer,
     report,

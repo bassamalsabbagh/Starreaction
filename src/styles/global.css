@@ -71,6 +71,10 @@
   --color-earth: #9cc3ff;
   /* The ground below the horizon in the horizon view. */
   --color-ground: #1b1c20;
+  /* The light checkerboard under a transparency legend (visibility overlays), so a see-through
+     colour reads as see-through. */
+  --color-checker-light: #e6e4df;
+  --color-checker-dark: #b8b6b1;
   /* The Compare Timeline's bars: green both up (also striped), yellow Sun only, blue Earth only,
      the empty track neither. Far apart in lightness as well as hue, for projectors and colour-blind
      viewers; each state is also given in words. */

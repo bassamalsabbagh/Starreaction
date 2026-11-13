@@ -5,6 +5,10 @@ import type * as Cesium from 'cesium';
 import type { Viewer } from 'cesium';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CesiumVisibilityController } from '../../../../src/features/lunar-map/visibility/cesium-visibility-controller.mjs';
+import {
+  IDLE_RUNTIME,
+  visibilityReadout,
+} from '../../../../src/features/lunar-map/visibilityLayer';
 
 const TIMES = ['2026-11-24T00:00:00Z', '2026-11-24T00:10:00Z'];
 const fileStamp = (time: string) => time.replace(/[-:]/g, '');
@@ -178,6 +182,26 @@ describe('CesiumVisibilityController (mocked Cesium)', () => {
     expect(active).toEqual([basemap]);
     expect(controller.sample('sun', 0, -90)).toBeNull();
     await expect(controller.setTime(TIMES[0] ?? '')).rejects.toThrow(/disposed/);
+  });
+
+  it('reads 0 % and a partial value at a supported time, unchanged by the new palettes', async () => {
+    const { create } = setup();
+    const controller = await create();
+    await controller.setTime(TIMES[1] ?? '');
+    const readAt = (lon: number, lat: number) =>
+      visibilityReadout({
+        runtime: { ...IDLE_RUNTIME, status: 'ready', appliedTime: TIMES[1] ?? null },
+        frame: TIMES[1] ?? null,
+        hasPoint: true,
+        sample: controller.sample('earth', lon, lat),
+      });
+    // The pole cell holds 0.25; the cells round it hold 0 (valid, not NoData).
+    expect(readAt(0, -90)).toEqual({
+      main: 'Approx. visible disc: 25 %',
+      detail: '9.6 km grid · 2026-11-24 00:10 UTC',
+    });
+    expect(readAt(0, -89.99997).main).toBe('Approx. visible disc: 0 %');
+    expect(readAt(0, -79).main).toBe('No data');
   });
 
   it('rejects when the manifest cannot be read', async () => {

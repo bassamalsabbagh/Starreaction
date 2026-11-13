@@ -1,0 +1,20 @@
+{
+  "about": "Display-only colours for the visibility prototype layer (docs/LANDER_RULES.md, 'Visibility prototype layer'). Used by scripts/data/recolor_visibility.py to draw public/data/visibility-cap/*.png from the numerical JSON grids, and by the app's legends. Values never come from these colours.",
+  "alpha": { "zero": 0, "min": 0.3, "max": 1 },
+  "sun": {
+    "label": "Sun",
+    "stops": [
+      { "value": 0, "color": "#7a3d00" },
+      { "value": 0.5, "color": "#ff8a00" },
+      { "value": 1, "color": "#ffd84d" }
+    ]
+  },
+  "earth": {
+    "label": "Earth",
+    "stops": [
+      { "value": 0, "color": "#0b2470" },
+      { "value": 0.5, "color": "#00c4e0" },
+      { "value": 1, "color": "#d6f2ff" }
+    ]
+  }
+}

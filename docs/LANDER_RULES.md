@@ -479,9 +479,15 @@ separate from the fixed elevation and slope layers.
 - **Readout:** from the frame's numerical grid (nearest 9.6 km cell), never from colours: "Approx.
   visible disc: N %", the sampled UTC time and "9.6 km grid". 0 % is a valid value; outside the
   grid's coverage, "No data".
-- **Display:** Sun and Earth as separate layers with their own switch and opacity; Sun on and
-  Earth off at first (so one opaque layer does not hide the other); a fixed 0–1 legend (the
-  manifest's colours). Always labelled: **"Prototype geometric visibility · 9.6 km grid · 2 m
+- **Display (presentation polish, 2026-11-14):** one visibility overlay at a time, chosen with
+  Sun / Earth buttons (each keeps its own opacity); Sun first. Each has its own palette (Sun: dark
+  amber → orange → bright gold; Earth: deep blue → cyan → pale blue; `src/data/visibility/
+palette.json`). **0 % is fully transparent** and opacity rises with the value (30 % at the
+  smallest step, 100 % at full), times the user's opacity slider, so the terrain shows through. The
+  legend of each overlay shows its own palette and transparency (0–100 %). The PNGs were redrawn
+  from the package's own numerical grids with its own pixel geometry (same size and bounds, checked
+  against the supplied images) by `scripts/data/recolor_visibility.py`; display only, no value
+  changed. Layer order is fixed: basemap, elevation, slope, then the visibility overlay on top. Always labelled: **"Prototype geometric visibility · 9.6 km grid · 2 m
   assumed height · eclipses not modeled"**.
 - The layer does not feed any check, ranking or verdict.
 

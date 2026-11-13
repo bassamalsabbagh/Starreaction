@@ -31,20 +31,21 @@ afterEach(() => {
 });
 
 describe('Visibility (prototype) in the map layers panel', () => {
-  it('starts with the Sun on, takes the readings, and leaves slope as it was', async () => {
+  it('starts with the Sun overlay, takes the readings, and leaves slope as it was', async () => {
     freezeTime('2026-11-30T12:07:00Z');
     const panel = await openLayers();
     const globe = screen.getByTestId('moon-globe');
-    expect(
-      within(panel).queryByRole('checkbox', { name: 'Sun visibility (prototype)' }),
-    ).toBeNull();
+    expect(within(panel).queryByRole('group', { name: 'Visibility overlay' })).toBeNull();
     fireEvent.click(within(panel).getByRole('checkbox', { name: 'Visibility (prototype)' }));
-    expect(
-      within(panel).getByRole('checkbox', { name: 'Sun visibility (prototype)' }),
-    ).toBeChecked();
-    expect(
-      within(panel).getByRole('checkbox', { name: 'Earth visibility (prototype)' }),
-    ).not.toBeChecked();
+    const overlay = within(panel).getByRole('group', { name: 'Visibility overlay' });
+    expect(within(overlay).getByRole('button', { name: 'Sun' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(overlay).getByRole('button', { name: 'Earth' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     // No frame applied yet: loading, and no time claimed.
     expect(within(panel).getByTestId('visibility-frame')).toHaveTextContent(
       'Loading visibility frame…',
@@ -66,9 +67,21 @@ describe('Visibility (prototype) in the map layers panel', () => {
     expect(within(panel).getByTestId('visibility-readout')).toBeInTheDocument();
     expect(within(panel).getByRole('radio', { name: 'Slope' })).not.toBeChecked();
 
+    // Choosing the Earth: one overlay at a time, and the readings follow it.
+    fireEvent.click(within(overlay).getByRole('button', { name: 'Earth' }));
+    expect(within(overlay).getByRole('button', { name: 'Earth' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(panel).queryByRole('radio', { name: 'Sun visibility (prototype)' })).toBeNull();
+    expect(
+      within(panel).getByRole('radio', { name: 'Earth visibility (prototype)' }),
+    ).toBeChecked();
+    expect(globe).toHaveAttribute('data-layers', 'slope:0.8');
+
     // Switched off: no visibility choice left; slope reads again.
     fireEvent.click(within(panel).getByRole('checkbox', { name: 'Visibility (prototype)' }));
-    expect(within(panel).queryByRole('radio', { name: 'Sun visibility (prototype)' })).toBeNull();
+    expect(within(panel).queryByRole('radio', { name: 'Earth visibility (prototype)' })).toBeNull();
     expect(within(panel).getByRole('radio', { name: 'Slope' })).toBeChecked();
   });
 

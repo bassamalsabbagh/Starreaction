@@ -76,13 +76,15 @@ import { PREVIEW_FAILURE_THRESHOLD, PREVIEW_IMAGERY, type ImageryStatus } from '
 import { MapControls } from './MapControls';
 import { SHADE_EVERYWHERE, type LayerDisplay, type LayerImageSpec } from './mapLayerState';
 import {
-  applyVisibilityDisplay,
+  controllerLayers,
   createVisibilityController,
   type VisibilityHandle,
 } from './visibilityController';
 import {
   VISIBILITY_MANIFEST_URL,
+  applyVisibilityDisplay,
   createFrameRequester,
+  raiseOverlayToTop,
   type VisibilityDisplay,
   type VisibilityRuntime,
 } from './visibilityLayer';
@@ -1458,6 +1460,8 @@ export function MoonGlobe({
           if (layers.contains(imagery)) layers.raiseToTop(imagery);
         }
       }
+      // The visibility overlay stays above elevation and slope.
+      raiseVisibility(widget, visibilityHandleRef.current);
       widget.scene.requestRender();
     };
     // Each image as its own imagery layer, drawn pixel for pixel (no blending of the team's
@@ -1550,16 +1554,19 @@ export function MoonGlobe({
     if (!widget || widget.isDestroyed()) return;
     const handle = visibilityHandleRef.current;
     if (handle) {
-      applyVisibilityDisplay(handle, visibility);
+      applyVisibilityDisplay(handle.controller, handle.requester, visibility);
       return;
     }
     if (!visibility.load || visibilityStartedRef.current) return;
     visibilityStartedRef.current = true;
     const report = (patch: Partial<VisibilityRuntime>) => onVisibilityStateRef.current?.(patch);
     report({ status: 'loading' });
-    createVisibilityController(widget, VISIBILITY_MANIFEST_URL, (timeUTC) =>
-      report({ appliedTime: timeUTC }),
-    ).then(
+    // A frame's new layers go on top of whatever is there; the order is put back each time.
+    createVisibilityController(widget, VISIBILITY_MANIFEST_URL, (timeUTC) => {
+      raiseVisibility(widget, visibilityHandleRef.current);
+      widget.scene.requestRender();
+      report({ appliedTime: timeUTC });
+    }).then(
       (controller) => {
         // The globe went while the manifest loaded: the controller has no layers yet to remove.
         if (widget.isDestroyed()) return;
@@ -1576,10 +1583,9 @@ export function MoonGlobe({
         };
         report({
           status: 'ready',
-          colors: controller.manifest.colors ?? null,
           sample: (target, lon, lat) => controller.sample(target, lon, lat),
         });
-        applyVisibilityDisplay(next, visibilityRef.current);
+        applyVisibilityDisplay(controller, requester, visibilityRef.current);
       },
       () => {
         if (!widget.isDestroyed()) report({ status: 'unavailable' });
@@ -1746,6 +1752,15 @@ function sunGlowImage(colour: string): HTMLCanvasElement {
 /** A CSS colour at an opacity, for canvas gradients. */
 function withAlpha(colour: string, alpha: number): string {
   return Color.fromCssColorString(colour).withAlpha(alpha).toCssColorString();
+}
+
+/**
+ * Layer order: basemap, then elevation and slope, then the visibility overlay on top
+ * (docs/LANDER_RULES.md, "Visibility prototype layer", Display).
+ */
+function raiseVisibility(widget: CesiumWidget, handle: VisibilityHandle | null) {
+  if (!handle || widget.isDestroyed()) return;
+  raiseOverlayToTop(widget.imageryLayers, controllerLayers(handle.controller));
 }
 
 /** Swaps a beacon's image and hover text; true when the image changed (so it fades back in). */

@@ -1414,7 +1414,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                   runtime: visibility.runtime,
                   frame: visibility.frame,
                   onToggle: visibility.toggle,
-                  onToggleTarget: visibility.toggleTarget,
+                  onChoose: visibility.choose,
                   onOpacity: visibility.setOpacity,
                   activeTarget: visibilityTarget,
                   onActiveTarget: visibility.setPrefer,

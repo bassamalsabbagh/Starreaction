@@ -130,6 +130,19 @@ describe.runIf(HAS_DATA)('visibility frames on disk', () => {
     });
   }
 
+  it('has the redrawn images at the package’s size: 1024 × 128 RGBA PNG', () => {
+    for (const file of ['sun_20261124T000000Z.png', 'earth_20261208T000000Z.png']) {
+      const bytes = new Uint8Array(readFileSync(`${DIR}/${file}`));
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+      expect(new TextDecoder().decode(bytes.subarray(12, 16))).toBe('IHDR');
+      expect(view.getUint32(16)).toBe(1024);
+      expect(view.getUint32(20)).toBe(128);
+      expect(bytes[24]).toBe(8); // bit depth
+      expect(bytes[25]).toBe(6); // colour type 6: RGBA, so 0 % can be transparent
+    }
+  });
+
   it('has a different Sun picture at the two ends (the frames follow the time)', () => {
     const first = read<NumericGrid>('sun_20261124T000000Z.json');
     const last = read<NumericGrid>('sun_20261208T000000Z.json');

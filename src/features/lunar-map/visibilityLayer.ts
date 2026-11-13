@@ -4,7 +4,6 @@
  * the readout and the frame loading order. No Cesium import, so it stays testable. It never feeds a
  * check, the ranking or a verdict.
  */
-import type { LegendStop } from '../../services/mapLayers';
 import { DEFAULT_LAYER_OPACITY, type LayerSetting } from './mapLayerState';
 
 export type VisibilityTarget = 'sun' | 'earth';
@@ -52,26 +51,26 @@ export function formatFrameTime(stamp: string): string {
   return `${stamp.slice(0, 10)} ${stamp.slice(11, 16)} UTC`;
 }
 
-/** The master switch, and each target's own switch and opacity. */
+/** The master switch, the one overlay shown (Sun or Earth), and each target's own opacity. */
 export interface VisibilitySettings {
   readonly on: boolean;
   /** Switched on at least once: nothing loads before that. */
   readonly started: boolean;
-  readonly sun: LayerSetting;
-  readonly earth: LayerSetting;
+  readonly active: VisibilityTarget;
+  readonly opacity: Readonly<Record<VisibilityTarget, number>>;
 }
 
-/** Sun on and Earth off at first, so one opaque layer does not hide the other. */
+/** One overlay at a time, the Sun first (docs/LANDER_RULES.md, "Display"). */
 export const INITIAL_VISIBILITY: VisibilitySettings = {
   on: false,
   started: false,
-  sun: { visible: true, opacity: DEFAULT_LAYER_OPACITY },
-  earth: { visible: false, opacity: DEFAULT_LAYER_OPACITY },
+  active: 'sun',
+  opacity: { sun: DEFAULT_LAYER_OPACITY, earth: DEFAULT_LAYER_OPACITY },
 };
 
-/** The targets switched on (none while the master switch is off). */
+/** The overlay shown: the active one while the master switch is on, otherwise none. */
 export function shownTargets(settings: VisibilitySettings): VisibilityTarget[] {
-  return settings.on ? VISIBILITY_TARGETS.filter((target) => settings[target].visible) : [];
+  return settings.on ? [settings.active] : [];
 }
 
 /** What the globe draws: a target is visible only with a frame for the app's time. */
@@ -89,7 +88,7 @@ export function visibilityDisplay(
   const shown = shownTargets(settings);
   const setting = (target: VisibilityTarget): LayerSetting => ({
     visible: frame !== null && shown.includes(target),
-    opacity: settings[target].opacity,
+    opacity: settings.opacity[target],
   });
   return { load: settings.started, frame, sun: setting('sun'), earth: setting('earth') };
 }
@@ -115,7 +114,6 @@ export interface VisibilityRuntime {
   readonly loading: boolean;
   /** The last frame could not be loaded (shown briefly). */
   readonly failed: boolean;
-  readonly colors: Readonly<Record<string, string>> | null;
   readonly sample: VisibilitySampler | null;
 }
 
@@ -124,19 +122,46 @@ export const IDLE_RUNTIME: VisibilityRuntime = {
   appliedTime: null,
   loading: false,
   failed: false,
-  colors: null,
   sample: null,
 };
 
-/** The manifest's colours as legend stops on the fixed 0–1 scale. */
-export function visibilityLegendStops(
-  colors: Readonly<Record<string, string>> | null,
-): LegendStop[] {
-  if (!colors) return [];
-  return Object.entries(colors)
-    .map(([key, color]) => ({ value: Number(key), color }))
-    .filter((stop) => Number.isFinite(stop.value) && stop.value >= 0 && stop.value <= 1)
-    .sort((a, b) => a.value - b.value);
+/** What applyVisibilityDisplay needs of the controller. */
+export interface VisibilitySwitches {
+  setVisible: (target: VisibilityTarget, visible: boolean) => void;
+  setOpacity: (target: VisibilityTarget, alpha: number) => void;
+}
+
+/**
+ * Switches, opacities and the frame for the app's time, onto the controller: the active overlay
+ * shown, the other hidden, each at its own opacity.
+ */
+export function applyVisibilityDisplay(
+  controller: VisibilitySwitches,
+  requester: FrameRequester,
+  display: VisibilityDisplay,
+): void {
+  for (const target of VISIBILITY_TARGETS) {
+    const setting = display[target];
+    controller.setVisible(target, setting.visible);
+    controller.setOpacity(target, Math.min(1, Math.max(0, setting.opacity)));
+  }
+  if (display.frame !== null) requester.request(display.frame);
+}
+
+/** The bits of Cesium's ImageryLayerCollection the layer order needs. */
+export interface LayerStack<L> {
+  contains: (layer: L) => boolean;
+  raiseToTop: (layer: L) => void;
+}
+
+/**
+ * Puts the visibility overlay's layers on top of everything (basemap, elevation, slope), whatever
+ * order things were switched on or frames applied. Missing or removed layers are skipped.
+ */
+export function raiseOverlayToTop<L>(stack: LayerStack<L>, layers: readonly (L | undefined)[]) {
+  for (const layer of layers) {
+    if (layer !== undefined && stack.contains(layer)) stack.raiseToTop(layer);
+  }
 }
 
 /** The panel's frame line: the frame actually shown, or why there is none. */

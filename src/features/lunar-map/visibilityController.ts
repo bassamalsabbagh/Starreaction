@@ -9,11 +9,12 @@ import {
   Rectangle,
   SingleTileImageryProvider,
   type CesiumWidget,
+  type ImageryLayer,
   type Viewer,
 } from 'cesium';
 import type * as Cesium from 'cesium';
 import { CesiumVisibilityController } from './visibility/cesium-visibility-controller.mjs';
-import { VISIBILITY_TARGETS, type FrameRequester, type VisibilityDisplay } from './visibilityLayer';
+import { VISIBILITY_TARGETS, type FrameRequester } from './visibilityLayer';
 
 export type { CesiumVisibilityController };
 
@@ -23,17 +24,18 @@ export interface VisibilityHandle {
   readonly requester: FrameRequester;
 }
 
-/** Switches, opacities and the frame for the app's time, onto the controller. */
-export function applyVisibilityDisplay(
-  { controller, requester }: VisibilityHandle,
-  display: VisibilityDisplay,
-): void {
-  for (const target of VISIBILITY_TARGETS) {
-    const setting = display[target];
-    controller.setVisible(target, setting.visible);
-    controller.setOpacity(target, Math.min(1, Math.max(0, setting.opacity)));
-  }
-  if (display.frame !== null) requester.request(display.frame);
+/**
+ * The controller's current Sun and Earth imagery layers. They live in its `layers` field, which
+ * its declaration file leaves out; read here only to put them on top of the other layers.
+ */
+export function controllerLayers(controller: CesiumVisibilityController): ImageryLayer[] {
+  const { layers } = controller as unknown as {
+    layers?: Partial<Record<(typeof VISIBILITY_TARGETS)[number], ImageryLayer>>;
+  };
+  return VISIBILITY_TARGETS.flatMap((target) => {
+    const layer = layers?.[target];
+    return layer ? [layer] : [];
+  });
 }
 
 const CESIUM_PARTS: Pick<typeof Cesium, 'Ellipsoid' | 'Rectangle' | 'SingleTileImageryProvider'> = {

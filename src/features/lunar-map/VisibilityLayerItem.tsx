@@ -1,4 +1,3 @@
-import { legendScale } from './mapLayerState';
 import {
   TARGET_LABELS,
   UNAVAILABLE_TEXT,
@@ -7,11 +6,11 @@ import {
   VISIBILITY_SWITCH_LABEL,
   VISIBILITY_TARGETS,
   frameLine,
-  visibilityLegendStops,
   type VisibilityRuntime,
   type VisibilitySettings,
   type VisibilityTarget,
 } from './visibilityLayer';
+import { VISIBILITY_PALETTE, paletteGradient } from './visibilityPalette';
 import styles from './VisibilityLayerItem.module.css';
 
 export interface VisibilityControls {
@@ -20,44 +19,65 @@ export interface VisibilityControls {
   /** The frame for the app's time, or null outside the supplied frames. */
   frame: string | null;
   onToggle: () => void;
-  onToggleTarget: (target: VisibilityTarget) => void;
+  /** Shows this overlay and hides the other. */
+  onChoose: (target: VisibilityTarget) => void;
   onOpacity: (target: VisibilityTarget, opacity: number) => void;
 }
 
-/** The fixed 0–100 % legend from the manifest's colours (the same for every frame). */
-function VisibilityLegend({ colors }: { colors: VisibilityRuntime['colors'] }) {
-  const stops = visibilityLegendStops(colors);
-  if (stops.length < 2) return null;
-  const scale = legendScale({ stops, min: 0, max: 1 });
+/** The buttons' short names. */
+const SHORT_LABELS: Readonly<Record<VisibilityTarget, string>> = { sun: 'Sun', earth: 'Earth' };
+
+/**
+ * The overlay's fixed 0–100 % legend in its own palette (src/data/visibility/palette.json), over a
+ * checkerboard so the transparent 0 % end and the opacity growing toward 100 % both show.
+ */
+function VisibilityLegend({ target }: { target: VisibilityTarget }) {
+  const stops = VISIBILITY_PALETTE[target];
   return (
-    <figure className={styles.legend} aria-label="Visibility legend, % of the disc">
-      <div className={styles.bar} style={{ background: scale.gradient }} aria-hidden="true" />
-      <div className={styles.ticks}>
-        {scale.ticks.map((tick) => (
-          <span key={tick.value} className={styles.tick} style={{ left: `${tick.at * 100}%` }}>
-            {Math.round(tick.value * 100)} %
-          </span>
-        ))}
+    <figure className={styles.legend} aria-label={`${TARGET_LABELS[target]} legend, % of the disc`}>
+      <div className={styles.bar} aria-hidden="true">
+        <div
+          className={styles.fill}
+          data-testid={`visibility-legend-${target}`}
+          style={{ background: paletteGradient(stops) }}
+        />
       </div>
-      <figcaption className={styles.unit}>Approx. visible disc (%)</figcaption>
+      <div className={styles.ticks}>
+        <span className={styles.tick} style={{ left: '0%' }}>
+          0 % (transparent)
+        </span>
+        <span className={styles.tick} style={{ left: '50%' }}>
+          50 %
+        </span>
+        <span className={styles.tick} style={{ left: '100%' }}>
+          100 %
+        </span>
+      </div>
+      <figcaption className={styles.unit}>
+        {SHORT_LABELS[target]}: approx. visible disc (%); 0 % is transparent, so the terrain shows
+        through
+      </figcaption>
     </figure>
   );
 }
 
 /**
  * The visibility prototype in the map layers panel (docs/LANDER_RULES.md, "Visibility prototype
- * layer"): one switch that shows the Sun and Earth layers, each with its own switch and opacity;
- * the legend, the fixed label and the frame actually shown.
+ * layer"): one switch, then Sun | Earth buttons choosing the one overlay shown, its opacity (each
+ * keeps its own), its legend, the fixed label and the frame actually shown.
  */
 export function VisibilityLayerItem({
   settings,
   runtime,
   frame,
   onToggle,
-  onToggleTarget,
+  onChoose,
   onOpacity,
 }: VisibilityControls) {
   const unavailable = runtime.status === 'unavailable';
+  const active = settings.active;
+  const label = TARGET_LABELS[active];
+  const opacity = Math.round(settings.opacity[active] * 100);
   return (
     <li className={styles.layer}>
       <label className={styles.toggle}>
@@ -72,36 +92,39 @@ export function VisibilityLayerItem({
       {unavailable ? <p className={styles.note}>{UNAVAILABLE_TEXT}</p> : null}
       {settings.on && !unavailable ? (
         <>
-          {VISIBILITY_TARGETS.map((target) => {
-            const label = TARGET_LABELS[target];
-            const setting = settings[target];
-            const opacity = Math.round(setting.opacity * 100);
-            return (
-              <div key={target} className={styles.target}>
-                <label className={styles.toggle}>
-                  <input
-                    type="checkbox"
-                    checked={setting.visible}
-                    onChange={() => onToggleTarget(target)}
-                  />
-                  {label}
-                </label>
-                <label className={styles.opacity}>
-                  <span>Opacity {opacity}%</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={opacity}
-                    aria-label={`${label} opacity`}
-                    onChange={(event) => onOpacity(target, Number(event.target.value) / 100)}
-                  />
-                </label>
-              </div>
-            );
-          })}
-          <VisibilityLegend colors={runtime.colors} />
+          <div className={styles.segmented} role="group" aria-label="Visibility overlay">
+            {VISIBILITY_TARGETS.map((target) => {
+              const stops = VISIBILITY_PALETTE[target];
+              const top = stops[stops.length - 1]?.color;
+              return (
+                <button
+                  key={target}
+                  type="button"
+                  className={styles.segment}
+                  aria-pressed={target === active}
+                  onClick={() => onChoose(target)}
+                >
+                  <span className={styles.swatch} style={{ background: top }} aria-hidden="true" />
+                  {SHORT_LABELS[target]}
+                </button>
+              );
+            })}
+          </div>
+          <label className={styles.opacity}>
+            <span>
+              {SHORT_LABELS[active]} opacity {opacity}%
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={opacity}
+              aria-label={`${label} opacity`}
+              onChange={(event) => onOpacity(active, Number(event.target.value) / 100)}
+            />
+          </label>
+          <VisibilityLegend target={active} />
           <p className={styles.label}>{VISIBILITY_LABEL}</p>
           <p className={styles.note}>{VISIBILITY_MEANING}</p>
           <p className={styles.frame} aria-live="polite" data-testid="visibility-frame">
