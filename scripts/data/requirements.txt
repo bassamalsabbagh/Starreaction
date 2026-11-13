@@ -1,0 +1,7 @@
+# Offline data scripts only (CLAUDE.md exception 3); never shipped to the browser.
+# Install in a virtual environment, not system-wide:
+#   python -m venv scripts/data/.venv
+#   scripts/data/.venv/Scripts/python -m pip install -r scripts/data/requirements.txt
+numpy==2.4.6
+# elevation_grid.py reads GeoTIFFs with rasterio (not installed or run on the team laptops yet).
+rasterio==1.4.3

@@ -1,0 +1,29 @@
+# What `vercel` must never upload from this laptop (it builds the site from the rest).
+# Mirrors the safety entries of .gitignore.
+
+# Dependencies and build output (Vercel installs and builds itself)
+node_modules/
+dist/
+public/cesium/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+
+# Raw elevation maps and the data scripts' Python environment
+*.tif
+*.tiff
+data-raw/
+scripts/data/.venv/
+__pycache__/
+
+# TEST terrain horizons: no recorded source, local only (docs/LANDER_RULES.md, "Terrain horizon")
+src/data/terrainHorizons.ts
+
+# Teammates' working files and local tool settings
+docs/team/
+.claude/settings.local.json

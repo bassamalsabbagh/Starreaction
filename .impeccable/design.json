@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T15:05:56+00:00",
+  "title": "Design System: StarReaction · CLPS Lander Advisor",
+  "extensions": {
+    "colorMeta": {
+      "accent-orange": {
+        "role": "primary",
+        "displayName": "Logo Orange",
+        "canonical": "#ffb347",
+        "tonalRamp": [
+          "#3d2600",
+          "#5c3a00",
+          "#7d5000",
+          "#a56b0a",
+          "#d18a1f",
+          "#ffb347",
+          "#ffcb85",
+          "#ffe4c2"
+        ]
+      },
+      "window-teal": {
+        "role": "secondary",
+        "displayName": "Window Teal",
+        "canonical": "#4fc9c0",
+        "tonalRamp": [
+          "#0b2b29",
+          "#12403d",
+          "#1a5a55",
+          "#257a73",
+          "#349f97",
+          "#4fc9c0",
+          "#8adcd5",
+          "#c6efeb"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#0e0f11",
+        "tonalRamp": [
+          "#020203",
+          "#0c0d0f",
+          "#0e0f11",
+          "#16171a",
+          "#18191c",
+          "#2a2c31",
+          "#3c3e44",
+          "#8e8d89"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Off-white",
+        "canonical": "#eceae6",
+        "tonalRamp": [
+          "#3c3e44",
+          "#5c5d61",
+          "#8e8d89",
+          "#a9a8a4",
+          "#c9c7c2",
+          "#d8d5ce",
+          "#eceae6",
+          "#ffffff"
+        ]
+      },
+      "score-great": {
+        "role": "status",
+        "displayName": "Great / Live green",
+        "canonical": "#5fd49a"
+      },
+      "score-ok": {
+        "role": "status",
+        "displayName": "OK amber",
+        "canonical": "#f0c75e"
+      },
+      "score-poor": {
+        "role": "status",
+        "displayName": "Poor red",
+        "canonical": "#ff7b72"
+      },
+      "status-demo": {
+        "role": "status",
+        "displayName": "Demo coral",
+        "canonical": "#ff9e8a"
+      }
+    },
+    "typographyMeta": {
+      "readout": {
+        "displayName": "Readout",
+        "purpose": "The selected site's score only."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The site's name on its card; caption titles."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "Demo and replay captions; Compare names."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Panel text (15px base)."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Secondary text, chips, timeline controls."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Panel view titles (uppercase, tracked) and rail labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 2px 10px rgb(0 0 0 / 0.4)",
+        "purpose": "Every floating surface over the Moon."
+      },
+      {
+        "name": "tip",
+        "value": "0 2px 8px rgb(0 0 0 / 0.35)",
+        "purpose": "Tooltips and the map name tag."
+      },
+      {
+        "name": "pop",
+        "value": "0 8px 24px rgb(0 0 0 / 0.45)",
+        "purpose": "Popovers."
+      },
+      {
+        "name": "modal",
+        "value": "0 16px 40px rgb(0 0 0 / 0.5)",
+        "purpose": "The About dialog."
+      },
+      {
+        "name": "halo",
+        "value": "0 0 0 1px rgb(0 0 0 / 0.6)",
+        "purpose": "A dark rim on marks drawn on the Moon."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Every slide and fade."
+      },
+      {
+        "name": "duration-panel",
+        "value": "250ms",
+        "purpose": "Panel slide and fade, handle glide, arrow turn, map framing."
+      },
+      {
+        "name": "view-in",
+        "value": "220ms opacity + 6px rise",
+        "purpose": "A view or card appearing in the panel."
+      },
+      {
+        "name": "value-in",
+        "value": "200ms opacity",
+        "purpose": "A changed score cross-fading."
+      },
+      {
+        "name": "hover",
+        "value": "120ms ease-out (color, background, border)",
+        "purpose": "Control hover states."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "599px"
+      },
+      {
+        "name": "compact",
+        "value": "767px"
+      },
+      {
+        "name": "tablet",
+        "value": "899px"
+      },
+      {
+        "name": "laptop",
+        "value": "1099px"
+      },
+      {
+        "name": "wide",
+        "value": "1600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action in a view (the tour's Next).",
+      "html": "<button class=\"ds-btn-primary\">Next</button>",
+      "css": ".ds-btn-primary{background:var(--color-text,#eceae6);color:var(--color-on-primary,#0c0d0f);padding:8px 16px;border:0;border-radius:var(--radius-md,8px);font:600 15px system-ui,sans-serif;cursor:pointer;transition:background-color 120ms ease-out,scale 120ms ease-out}.ds-btn-primary:hover{background:color-mix(in srgb,#eceae6 85%,transparent)}.ds-btn-primary:active{scale:.96}.ds-btn-primary:focus-visible{outline:2px solid #eceae6;outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined actions (Compare, Share, More, Add your own lander).",
+      "html": "<button class=\"ds-btn-secondary\">Share</button>",
+      "css": ".ds-btn-secondary{background:transparent;color:#eceae6;padding:8px 12px;border:1px solid #3c3e44;border-radius:8px;font:13px system-ui,sans-serif;cursor:pointer;transition:background-color 120ms ease-out,border-color 120ms ease-out}.ds-btn-secondary:hover{background:#18191c;border-color:#8e8d89}.ds-btn-secondary:focus-visible{outline:2px solid #eceae6;outline-offset:2px}"
+    },
+    {
+      "name": "Menu Rail",
+      "kind": "nav",
+      "refersTo": "rail-item",
+      "description": "The slim left rail: views first, actions at the foot; the active view has an orange marker.",
+      "html": "<nav class=\"ds-rail\"><button class=\"ds-rail-item\">Lander</button><button class=\"ds-rail-item ds-on\">Sites</button><button class=\"ds-rail-item\">Compare</button><button class=\"ds-rail-item ds-foot\">About</button></nav>",
+      "css": ".ds-rail{display:flex;flex-direction:column;gap:4px;width:64px;padding:4px;background:#0e0f11;border:1px solid #26282c;border-radius:12px;box-shadow:0 2px 10px rgb(0 0 0/.4)}.ds-rail-item{position:relative;min-height:52px;border:0;border-radius:8px;background:transparent;color:#a9a8a4;font:600 12px system-ui,sans-serif;cursor:pointer;transition:color 120ms ease-out,background-color 120ms ease-out}.ds-rail-item:hover{background:#18191c;color:#eceae6}.ds-rail-item.ds-on{background:#18191c;color:#eceae6}.ds-rail-item.ds-on::before{content:'';position:absolute;top:10px;bottom:10px;left:-4px;width:3px;border-radius:0 999px 999px 0;background:#ffb347}.ds-foot{margin-top:12px;border-top:1px solid #2a2c31;border-radius:0}.ds-rail-item:focus-visible{outline:2px solid #eceae6;outline-offset:-2px}"
+    },
+    {
+      "name": "Lander Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A lander limit: label on top, value at the bottom.",
+      "html": "<div class=\"ds-chip\"><span class=\"ds-chip-label\">Max slope</span><span class=\"ds-chip-value\">10°</span></div>",
+      "css": ".ds-chip{display:inline-flex;flex-direction:column;justify-content:space-between;min-width:96px;padding:4px 8px;background:#0c0d0f;border:1px solid #2a2c31;border-radius:8px;font-family:system-ui,sans-serif}.ds-chip-label{color:#8e8d89;font-size:12px}.ds-chip-value{color:#eceae6;font-size:15px;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Best-match Row",
+      "kind": "card",
+      "refersTo": "floating-panel",
+      "description": "The #1 site in the Sites view, with the orange best-match marker.",
+      "html": "<div class=\"ds-best\"><span class=\"ds-best-mark\"></span><strong>Demo Site Alpha</strong><span class=\"ds-best-score\">73 · Great</span><p>Main reason Slope (−11 points)</p></div>",
+      "css": ".ds-best{position:relative;display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:12px 12px 12px 16px;background:#18191c;border:1px solid #2a2c31;border-radius:8px;color:#eceae6;font:15px system-ui,sans-serif}.ds-best p{grid-column:1/-1;margin:0;color:#a9a8a4;font-size:13px}.ds-best-mark{position:absolute;top:12px;left:6px;width:3px;height:20px;border-radius:999px;background:#ffb347}.ds-best-score{color:#5fd49a;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Status Line",
+      "kind": "custom",
+      "refersTo": "timeline",
+      "description": "The pill above the timeline: lander, LIVE or SIMULATED, the clock.",
+      "html": "<div class=\"ds-status\"><b>Demo Lander A</b><span class=\"ds-live\">● LIVE</span><span>28 Oct 2026 · 14:33 UTC</span></div>",
+      "css": ".ds-status{display:inline-flex;align-items:center;gap:12px;padding:6px 12px;background:#0e0f11;border:1px solid #26282c;border-radius:999px;color:#eceae6;font:13px system-ui,sans-serif;font-variant-numeric:tabular-nums;box-shadow:0 2px 10px rgb(0 0 0/.4)}.ds-live{padding:0 6px;border:1px solid color-mix(in srgb,#5fd49a 45%,transparent);border-radius:999px;color:#5fd49a;font-size:12px;font-weight:600}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Moon is the screen",
+    "overview": "A full-screen, Sun-lit Moon with quiet instruments around its edge: a menu rail, one panel, a status line and a timeline. The answer comes first (the best match, its main reason and its best time to land), in plain words, with all data labelled demo.",
+    "keyCharacteristics": [
+      "Full-screen Moon that never moves for chrome",
+      "Rail + one solid panel; no glass, no blur",
+      "Neutral near-black palette with one logo-orange accent",
+      "Teal only for landing windows",
+      "Plain wording, demo data labelled",
+      "Transform/opacity motion, 200-300 ms, ease-out"
+    ],
+    "rules": [
+      {
+        "name": "One accent",
+        "body": "Orange marks what is selected or active, nothing else.",
+        "section": "colors"
+      },
+      {
+        "name": "Teal is time",
+        "body": "Teal only ever means a landing window.",
+        "section": "colors"
+      },
+      {
+        "name": "Nothing on the Moon without a backing",
+        "body": "Text over the Moon sits on a solid panel; marks drawn on it carry a dark halo.",
+        "section": "colors"
+      },
+      {
+        "name": "The heading carries the weight",
+        "body": "No eyebrow labels above headings.",
+        "section": "typography"
+      },
+      {
+        "name": "Borders for structure, shadows for lift",
+        "body": "A 1px rim for structure, one soft shadow for elevation.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the Moon full screen and still",
+      "Do show one panel at a time, opened from the rail",
+      "Do put the best match, its main reason and best time first",
+      "Do label demo data as demo and print score words beside colours"
+    ],
+    "donts": [
+      "Don't use glass, blur, cyan, gradient text or eyebrows",
+      "Don't animate layout properties or anything while the Moon is dragged",
+      "Don't bring back Excluded / Advisor / Featured / Simple-Expert wording",
+      "Don't state real mission facts"
+    ]
+  }
+}

@@ -1,0 +1,73 @@
+/* One slim column: icon buttons on one solid strip, groups split by a short rule. */
+.controls {
+  composes: panel from '../../styles/glass.module.css';
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.rule {
+  width: 20px;
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--glass-edge);
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  width: var(--map-control-size);
+  height: var(--map-control-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition-property: color, background-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.button:hover {
+  background: var(--color-panel-raised);
+  color: var(--color-text);
+}
+
+.button:active {
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button {
+    transition-property: color, background-color, border-color, scale;
+  }
+
+  .button:active {
+    scale: 0.96;
+  }
+}
+
+.button:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Selected (the grid is on): the accent, and pressed for assistive technology. */
+.buttonOn,
+.buttonOn:hover {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+/* Not usable yet (no elevation data): dimmed, the tooltip says why. */
+.buttonUnavailable,
+.buttonUnavailable:hover,
+.buttonUnavailable:active {
+  background: transparent;
+  color: var(--color-text-faint);
+  opacity: 0.5;
+  cursor: not-allowed;
+}

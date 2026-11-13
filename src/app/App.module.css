@@ -1,0 +1,388 @@
+/* The Moon fills the window; everything else floats over it and never resizes it. The insets
+   tell the overlays in the middle (the status strip, the demo's caption) how much of each edge
+   the left panel and the right icon column cover. The Moon itself stays centred. */
+.shell {
+  /* The rail's edge, the left panel's (the rail's when it is closed) and the right column's. */
+  --rail-edge: calc(var(--panel-gap) + var(--rail-width));
+  --map-inset-left: var(--rail-edge);
+  --map-inset-right: calc(var(--panel-gap) + var(--map-control-size) + 2 * var(--space-1) + 2px);
+  /* Compare: wider than the other panels, still leaving the Moon room. */
+  --compare-width: clamp(
+    20rem,
+    calc(100vw - 2 * var(--panel-gap) - var(--map-inset-right) - 18rem),
+    46rem
+  );
+  /* The time bar's height as shown (full or folded); the map frames the Moon above it. */
+  --time-bar-shown: var(--time-bar-height);
+  /* Everything along the bottom: the time bar and the status line above it. Panels, the map's
+     column and readout, and the demo caption all stop above it. */
+  --bottom-stack: calc(
+    var(--space-4) + var(--time-bar-shown) + var(--space-2) + var(--status-line-height)
+  );
+  /* Presentation mode's fade (PRESENT_MOVE_MS in App.tsx follows it). */
+  --duration-present: 280ms;
+
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--color-space);
+}
+
+.panelOpen {
+  --map-inset-left: calc(
+    var(--rail-edge) + var(--space-2) +
+      min(var(--panel-width), calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem))
+  );
+}
+
+.panelWide {
+  --map-inset-left: calc(
+    var(--rail-edge) + var(--space-2) +
+      min(var(--compare-width), calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem))
+  );
+}
+
+/* Three or four sites: up to 64rem. */
+.shell.compareWide {
+  --compare-width: clamp(
+    20rem,
+    calc(100vw - 2 * var(--panel-gap) - var(--map-inset-right) - 18rem),
+    64rem
+  );
+}
+
+.timeBarFolded {
+  --time-bar-shown: var(--time-bar-folded-height);
+  --bottom-stack: calc(
+    var(--space-4) + var(--time-bar-folded-height) + var(--space-2) + var(--status-line-height)
+  );
+}
+
+.workspace {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.mapLoading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* One view of the left panel: it scrolls inside the panel, and fades and rises a little as it
+   appears (switching views). Reduced motion: at once. */
+.view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-edge) transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .view {
+    animation: view-in 220ms var(--ease-out);
+  }
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* The middle: between the left panel and the right icon column. The status strip and the
+   presentation label sit at its top; the time bar spans the bottom. */
+.middleTop,
+.middleBottom {
+  position: absolute;
+  right: calc(var(--map-inset-right) + var(--space-3));
+  left: calc(var(--map-inset-left) + var(--space-3));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.middleTop {
+  top: var(--top-bar-height);
+}
+.middleTop > *,
+.middleBottom > * {
+  pointer-events: auto;
+}
+
+.middleBottom {
+  right: calc(var(--panel-gap) + var(--map-readout-width) + var(--space-2));
+  left: calc(var(--rail-edge) + var(--space-2));
+  bottom: var(--space-4);
+  gap: var(--space-2);
+}
+
+/* The timeline: the full width between the rail and the readout. */
+.middleBottom > :last-child {
+  width: 100%;
+}
+
+/* The visible map area, for framing the whole Moon: the full width (the Moon stays centred,
+   whatever panel is open), above the time bar. */
+.viewArea {
+  position: absolute;
+  top: var(--top-bar-height);
+  right: 0;
+  bottom: var(--bottom-stack);
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.keyHint {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-pill);
+  background: var(--color-panel);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  box-shadow: var(--shadow-float);
+}
+
+.keyHint kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  margin: 0 0.125rem;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .keyHint {
+    animation: hint-in 200ms var(--ease-out);
+  }
+}
+
+@keyframes hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Narrow screens: the panel covers most of the map, so the strip sits under it, edge to edge. */
+@media (max-width: 899px) {
+  .middleTop {
+    right: var(--space-2);
+    left: var(--space-2);
+  }
+
+  .middleBottom {
+    right: calc(var(--space-2) + var(--map-readout-width) + var(--space-2));
+    left: calc(var(--rail-edge) + var(--space-2));
+  }
+}
+
+/* The skip button: off screen until it has keyboard focus, then over the top-left corner. */
+.skip {
+  position: absolute;
+  top: var(--panel-gap);
+  left: var(--panel-gap);
+  z-index: 60;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-text);
+  color: var(--color-on-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  translate: 0 calc(-100% - var(--panel-gap) - 4px);
+}
+
+.skip:focus-visible {
+  translate: none;
+}
+
+/* The rail: always there, except in presentation mode. The layer spans the workspace's height,
+   so the rail can run from under the top row to the bottom edge. */
+.railLayer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 35;
+}
+
+/* The top row lies over the map, so the map keeps its size when it goes. */
+.topBar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 40;
+}
+
+/* Presentation mode: no top row, panel, status strip or map column; the Moon, the time bar and
+   a small site label stay. Kept last so it wins over the rules above. */
+.shell.presenting {
+  --map-inset-left: 0px;
+  --map-inset-right: 0px;
+
+  /* Projector readability (2026-11-13): the small text steps up a size and the greys lighten, so
+     the time bar and the site label read from the back of a room. Tokens only, same layout. */
+  --font-size-xs: 0.875rem;
+  --font-size-caption: 0.9375rem;
+  --font-size-sm: 1.0625rem;
+  --color-text-muted: var(--color-text-muted-projector);
+  --color-text-faint: var(--color-text-faint-projector);
+}
+
+.shell.presenting .middleBottom {
+  right: var(--panel-gap);
+  left: var(--panel-gap);
+}
+
+.shell.presenting .middleTop {
+  right: calc(var(--space-4) + 10rem);
+  left: calc(var(--space-4) + 10rem);
+}
+
+.shell.presenting .topBar,
+.shell.presenting .railLayer,
+.shell.presenting .stripLayer,
+.labelLayer {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.shell.presenting .topBar {
+  transform: translateY(-8px);
+}
+
+.shell.presenting .labelLayer {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* The label sits where the top row was. */
+.labelLayer {
+  top: var(--panel-gap);
+}
+
+/* Fading out, visibility waits for the fade; fading in, it switches at once. */
+@media (prefers-reduced-motion: no-preference) {
+  .topBar,
+  .railLayer,
+  .stripLayer,
+  .labelLayer {
+    transition:
+      opacity var(--duration-present) var(--ease-out),
+      transform var(--duration-present) var(--ease-out),
+      visibility 0s;
+  }
+
+  .shell.presenting .topBar,
+  .shell.presenting .railLayer,
+  .shell.presenting .stripLayer,
+  .shell:not(.presenting) .labelLayer {
+    transition-delay: 0s, 0s, var(--duration-present);
+  }
+}
+
+/* The demo's caption slot: the free middle of the map (past the open panel and the right
+   column), above the time bar. It never covers either. */
+.middleCaption {
+  position: absolute;
+  top: calc(var(--top-bar-height) + var(--space-3));
+  right: calc(var(--map-inset-right) + var(--space-3));
+  bottom: calc(var(--bottom-stack) + var(--space-3));
+  left: calc(var(--map-inset-left) + var(--space-3));
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.middleCaption > * {
+  pointer-events: auto;
+}
+
+/* Narrow screens: the panel would leave no room beside it, so the caption keeps the width. */
+@media (max-width: 899px) {
+  .middleCaption {
+    left: calc(var(--rail-edge) + var(--space-2));
+  }
+}
+
+/* The selected site, small and floating where the top row was. */
+.presentLabel {
+  composes: panel from '../styles/glass.module.css';
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-float);
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.presentName {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.presentScore {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.presentDemo {
+  color: var(--color-status-demo);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+/* The point card's nearest site: a quiet inline link into its card. */
+.inlineLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-text-faint);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color 120ms ease-out;
+}
+
+.inlineLink:hover {
+  text-decoration-color: var(--color-text);
+}

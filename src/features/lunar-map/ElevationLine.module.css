@@ -1,0 +1,19 @@
+/* Elevation and slope on the place card: one fact line, its source under it. */
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0;
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.main {
+  color: var(--color-text-muted);
+}
+
+.sub {
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
+}

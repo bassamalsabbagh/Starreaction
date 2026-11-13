@@ -1,0 +1,267 @@
+/* The compare drawer's inside: a head, then a table that scrolls sideways with its row labels
+   pinned. The drawer's place and slide belong to the shell (App.module.css). */
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.count {
+  color: var(--color-text-faint);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.textButton,
+.remove {
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+  transition-property: color, border-color, background-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.textButton:hover,
+.remove:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition-property: color, background-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.close:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+/* "Why this one?": the panel's answer, above the evidence. */
+.verdict {
+  flex: none;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.verdictLabel {
+  font-weight: 600;
+}
+
+.verdict .demo {
+  margin-left: var(--space-1);
+  white-space: nowrap;
+}
+
+.empty {
+  padding: var(--space-4);
+}
+
+/* Sideways scroll for the columns; the row labels stay pinned on the left. */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-edge) transparent;
+}
+
+/* Fixed columns: the label column, then one per site at its minimum width. Wider panels share
+   the spare room; narrower ones scroll sideways. */
+.table {
+  --row-head: 7.5rem;
+  --column-min: 14rem;
+
+  width: max(100%, calc(var(--row-head) + var(--columns, 2) * var(--column-min)));
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--font-size-caption);
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  /* Wrap between words only: never a word split mid-way. */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+}
+
+/* Pinned column: row labels, on the panel's own surface so columns slide under them. */
+.rowHead,
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: var(--row-head);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.rowHead .sub {
+  font-size: var(--font-size-xs);
+}
+
+.corner {
+  z-index: 2;
+  vertical-align: bottom;
+}
+
+.demo {
+  color: var(--color-status-demo);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.colHead {
+  width: var(--column-min);
+}
+
+.colHead > * + * {
+  margin-top: var(--space-1);
+}
+
+/* The site's name selects it on the map. */
+.siteButton {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.siteButton:hover {
+  text-decoration-color: currentColor;
+}
+
+.cell {
+  color: var(--color-text);
+}
+
+.value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+}
+
+/* The best value in a row: a quiet tint and the word "Best"; the word carries the meaning. */
+.best {
+  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.bestMark {
+  margin-top: 0.125rem;
+  padding: 0 var(--space-1);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  border-radius: var(--radius-pill);
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.sub {
+  display: block;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.excluded {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Pass or Fail: an icon and the word, never colour alone. */
+.gate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+}
+
+.fail {
+  color: var(--color-score-poor);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .textButton,
+  .remove,
+  .close {
+    transition-property: color, border-color, background-color, scale;
+  }
+
+  .textButton:active,
+  .remove:active,
+  .close:active {
+    scale: 0.96;
+  }
+}

@@ -1,0 +1,133 @@
+/* The horizon view: a sky chart in a well, the paths in the Sun's and Earth's colours, each named
+   (never colour alone). */
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ground {
+  fill: var(--color-ground);
+}
+
+.terrain {
+  fill: color-mix(in srgb, var(--color-ground) 70%, var(--color-text-faint));
+}
+
+.horizon {
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5;
+}
+
+.grid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.minSun {
+  stroke: var(--color-sun);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+
+.axis {
+  fill: var(--color-text-muted);
+  /* 12px (was 11px): the app's smallest text, raised for projectors (2026-11-13). */
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sunPath,
+.earthPath {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sunPath {
+  stroke: var(--color-sun);
+  opacity: 0.75;
+}
+
+.earthPath {
+  stroke: var(--color-earth);
+  opacity: 0.75;
+}
+
+/* Now: a dot with a dark rim and its name. */
+.dot {
+  stroke: var(--color-bg);
+  stroke-width: 2;
+}
+
+.sun .dot {
+  fill: var(--color-sun);
+}
+
+.earth .dot {
+  fill: var(--color-earth);
+}
+
+.dotLabel {
+  fill: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--color-bg);
+  stroke-width: 3px;
+}
+
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swatchSun,
+.swatchEarth,
+.swatchMin {
+  width: 14px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.swatchSun {
+  background: var(--color-sun);
+}
+
+.swatchEarth {
+  background: var(--color-earth);
+}
+
+.swatchMin {
+  background: repeating-linear-gradient(90deg, var(--color-sun) 0 4px, transparent 4px 8px);
+}
+
+.horizonNote {
+  flex-basis: 100%;
+  color: var(--color-text-faint);
+  text-wrap: pretty;
+}

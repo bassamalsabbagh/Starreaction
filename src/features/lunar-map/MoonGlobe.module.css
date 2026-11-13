@@ -1,0 +1,218 @@
+.frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-space);
+}
+
+/* The canvas and what is pinned to it. MoonGlobe sizes it (a little larger than the map) and
+   shifts it so the camera's centre is the middle of the visible area (presentation mode, the
+   folded time bar), at the panel's pace. */
+.stage {
+  position: absolute;
+  transition:
+    translate var(--duration-panel) var(--ease-out),
+    transform var(--duration-panel) var(--ease-out);
+}
+
+.globe {
+  position: absolute;
+  inset: 0;
+}
+
+.globe :global(.cesium-widget),
+.globe :global(.cesium-widget canvas) {
+  width: 100%;
+  height: 100%;
+}
+
+/* The right edge: a slim icon column, vertically centred between the top row and the time bar,
+   with the small zoom readout under it. */
+.corner {
+  position: absolute;
+  top: calc(var(--top-bar-height) + (100% - var(--top-bar-height) - var(--bottom-stack, 9rem)) / 2);
+  right: var(--panel-gap);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.controls {
+  pointer-events: auto;
+}
+
+/* The readout: the bottom-right corner, level with the timeline beside it. */
+.readoutCorner {
+  position: absolute;
+  right: var(--panel-gap);
+  bottom: var(--space-4);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Presentation mode: the cluster fades out, then stops taking pointer and keyboard input. */
+.cornerHidden {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.cornerHidden .controls,
+.readoutCorner.cornerHidden {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .corner {
+    transition:
+      opacity var(--duration-present, 280ms) var(--ease-out),
+      visibility 0s;
+  }
+
+  .cornerHidden {
+    transition-delay: 0s, var(--duration-present, 280ms);
+  }
+}
+
+.hoverTip {
+  position: absolute;
+  z-index: 20;
+  max-width: 18rem;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 34px));
+  white-space: nowrap;
+  animation: tip-in 120ms ease-out;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The selected beacon's ring and name tag. MoonGlobe moves the wrapper to the beacon's screen
+   point after every render and sets --beacon-size to the beacon's drawn size. */
+.selection {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  visibility: hidden;
+  pointer-events: none;
+  --beacon-size: 48px;
+}
+
+.ring {
+  position: absolute;
+  top: calc(var(--beacon-size) / -2);
+  left: calc(var(--beacon-size) / -2);
+  width: var(--beacon-size);
+  height: var(--beacon-size);
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  /* A dark rim on both sides, so the orange reads over bright highland as well as dark mare. */
+  box-shadow:
+    0 0 0 1px var(--color-halo),
+    inset 0 0 0 1px var(--color-halo);
+}
+
+.tag {
+  position: absolute;
+  top: 0;
+  left: calc(var(--beacon-size) / 2 + var(--space-1));
+  padding: 0.125rem var(--space-2);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-fill);
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: var(--shadow-tip);
+  transform: translateY(-50%);
+}
+
+/* A slow pulse, decorative: it breathes out from the ring and fades. */
+@media (prefers-reduced-motion: no-preference) {
+  .ring::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border: 1.5px solid var(--color-accent);
+    border-radius: 50%;
+    opacity: 0;
+    animation: beacon-pulse 2.4s cubic-bezier(0.2, 0, 0, 1) infinite;
+  }
+}
+
+@keyframes beacon-pulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+.frame[data-dragging='true'] .ring::after {
+  display: none;
+}
+
+/* The picked point's pin: a small orange ring with a centre dot and the "Your point" tag;
+   MoonGlobe moves it to the point's screen position after every render. */
+.point {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  visibility: hidden;
+  pointer-events: none;
+  --beacon-size: 22px;
+}
+
+.pointMark {
+  position: absolute;
+  top: calc(var(--beacon-size) / -2);
+  left: calc(var(--beacon-size) / -2);
+  width: var(--beacon-size);
+  height: var(--beacon-size);
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--color-halo),
+    inset 0 0 0 1px var(--color-halo);
+}
+
+.pointMark::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-halo);
+  translate: -50% -50%;
+}
+
+/* Cesium's own credit bar (with its ion logo) is not shown; "Data sources" carries the credit. */
+.cesiumCredits {
+  display: none;
+}

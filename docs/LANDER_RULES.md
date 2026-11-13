@@ -1,0 +1,385 @@
+# Lander Rules and Site-Ranking Methodology
+
+This document defines **how** lander constraints and site rankings are represented. It must be
+filled in with sourced values **before** any constraint or scoring logic is implemented in code.
+
+> **Status:** template only. No lander constraints or ranking criteria have been researched or
+> agreed yet for **real** landers. Nothing below is a fact about any real lander. The gates and
+> score agreed on 2026-10-26 apply only to the practice demo fixture (see below).
+
+## Rules for this document
+
+- Every constraint value cites a source ID from `DATA_SOURCES.md`.
+- Values that are estimates, inferred or team assumptions are labelled **Assumption** and shown as
+  such in the UI.
+- If a constraint is unknown, write **Unknown**. Do not guess.
+- Ranking criteria, weights and their rationale are agreed by the team and recorded here, with a
+  date, before code is written.
+
+## Lander profile template
+
+Copy this block for each lander.
+
+```markdown
+### <Lander name> (<Provider>)
+
+| Field                  | Value | Unit | Source ID | Status (Sourced / Assumption / Unknown) |
+| ---------------------- | ----- | ---- | --------- | --------------------------------------- |
+| CLPS task order(s)     |       |      |           |                                         |
+| Missions flown/planned |       |      |           |                                         |
+| Constraint: …          |       |      |           |                                         |
+
+Notes:
+```
+
+Constraint categories to investigate (names only, no values implied): landing latitude range,
+terrain slope and roughness tolerance, landing ellipse size, lighting and solar power needs,
+direct-to-Earth communication visibility, thermal environment, payload mass class.
+
+## Site-ranking methodology
+
+_Not yet defined._ When defined, record:
+
+1. **Criteria:** what is measured, its unit, and its data source.
+2. **Eligibility filters:** hard constraints that exclude a site for a lander.
+3. **Scoring:** how criteria are normalised and combined, with the rationale for each weight.
+4. **Explanation:** how the UI shows the user why a site ranked where it did.
+5. **Limitations:** what the ranking does _not_ account for.
+
+## Practice demo fixture (not a methodology)
+
+`src/data/demoData.ts` holds made-up mission profiles and sites so the UI can be exercised. It is
+**not** a ranking methodology and nothing in it is sourced; the UI labels it DEMO. It must be
+replaced by a methodology documented above before any real data is used. **Every number in this
+section is DEMO** (made up for practice), except the Sun and Earth positions, which are real.
+
+### In plain words (agreed 2026-11-11)
+
+The app answers the challenge's question for a place and a date: **does the mission get sunlight
+for power, and the Earth in view to talk home?** A mission is described by its **needs**: the
+lowest Sun height its panels can use (`minSunElevationDeg`), the days of unbroken power it needs
+(`daysNeeded`), the lowest Earth height for direct contact (`minEarthElevationDeg`), and whether it
+has a relay (`hasRelay`). Every site, and any point the user picks, gets the same checks from the
+real Sun and Earth. There is **no score**: sites are listed by their longest usable window.
+
+### The checks (checked in this order, every failure listed; split into three 2026-11-13)
+
+Each check measures one thing, and its name says which:
+
+1. **Power (the Sun only):** the longest unbroken stretch inside the range with the Sun at or above
+   `minSunElevationDeg` must last at least `daysNeeded` → fails as "Not enough sunlight for its
+   power".
+2. **Comms (the Earth only):** without a relay, the Earth must reach `minEarthElevationDeg` at some
+   point in the range → fails as "No line of sight to Earth". A mission with a relay always passes.
+3. **Usable window (the Sun and the Earth both; the Sun only with a relay):** the longest unbroken
+   stretch inside the range with the Sun at or above `minSunElevationDeg` and the Earth at or above
+   `minEarthElevationDeg` at the same time must last at least `daysNeeded` → fails as "Not enough
+   time with Sun and Earth both up". With a relay the usable window **is** the power stretch, so
+   this check is not listed separately (it would only repeat Power).
+
+A place that passes them all is **suitable** ("Power and comms OK for …"). A stretch cut by the
+range's edge counts only the part inside the range. The split changes no result: a usable window
+of `daysNeeded` already means the Sun was up that long and the Earth was up at some point, so the
+same places pass as before; a failing place now names each thing it lacks. Compare shows one row
+per check (Power, Comms, Usable window); its "Best" for the usable window is the Sites list's best.
+
+### Order of the Sites list
+
+Suitable sites first, numbered, then the rest without a number. The order is the user's choice.
+Whatever the order, **"best"** (the highlighted card, the time bar's "Best site", the demo and the
+"Launch slipped?" sentence) always means the suitable site with the longest usable window, ties by
+name (2026-11-12):
+
+| Order           | Sorted by (highest first; ties by name)                       |
+| --------------- | ------------------------------------------------------------- |
+| Longest window  | the usable stretch the power check uses (default)             |
+| Most sunlight   | share of the range with the Sun up (`minSunElevationDeg`)     |
+| Most Earth time | share of the range with the Earth up (`minEarthElevationDeg`) |
+| Name            | A–Z                                                           |
+
+These are orderings of measured values, not a weighted score; no weights are involved.
+
+### % of mission needs met (agreed 2026-11-12, built 2026-11-13)
+
+**% of mission needs met** = longest usable window ÷ power days needed (`daysNeeded`), capped at
+100%. Sites below 100% show the percentage and what's missing. Sites at 100% show the window length
+and how many times over the need it is (for example "13.1 d, 6.5× what it needs"). The Sites list
+stays ordered by longest usable window. An open-ended window (a long polar day; its true length is
+not known) gives only a lower bound, so both numbers say "at least" (for example "at least 6.5×",
+"at least 80%").
+
+- **Which window:** the usable window inside the checked month (`usableDays`, what the checks use).
+- **Rounding:** the percentage and the "×" are rounded down and the days short are rounded up (to
+  one decimal), so a near miss never reads as met and a shortfall never reads as none.
+- **Where:** Site details ("Mission needs met"), each Sites list row ("6.5× what it needs"; a site
+  that is not suitable shows "61% of needs met · 1.2 d short of 3 d") and a Compare row. Code:
+  `src/data/needsMet.ts`.
+
+### Sunset, Earthset and the horizon view
+
+- **Now:** the Sun's and the Earth's elevation and azimuth at the place and the app's time.
+- **Sunset / Earthset (or rise):** the next time the body's centre crosses 0° elevation above the
+  smooth-sphere horizon. Found from the cached hourly samples, then narrowed to about a minute by
+  bisection; searched up to 32 days ahead ("up for the whole next month" otherwise). Code:
+  `src/utils/riseSet.ts`.
+- **Horizon view:** the hourly azimuth and elevation of both bodies over the range, drawn as paths
+  above a flat horizon, with the mission's `minSunElevationDeg` as a dashed line. When a terrain
+  profile exists for a site (`src/data/terrainPatches.ts`, none yet), its skyline replaces the flat
+  horizon. Code: `src/features/lunar-map/HorizonView.tsx`.
+
+### Other dates
+
+For the selected site or point, the same checks for each of the next six 29.5-day ranges (the
+current one first), each with its best window. "Go" moves the app's time to that window's start.
+Code: `src/features/lunar-map/OtherDates.tsx`.
+
+### Retired (2026-11-11)
+
+The weighted 0–100 score (slope, daylight margin, Earth visibility, thermal margin, science
+interest, with `DEMO_WEIGHTS`), the Great/OK/Poor rating words, the slope and temperature gates,
+the "what changed" score comparison and the landing area check are **removed**. They rested on
+made-up site values (slope, temperatures, science interest, safe area) and placeholder weights,
+and the challenge asks for power and communication windows, not a score. See the decision log.
+
+### Real geometry behind the checks and the windows
+
+Agreed 2026-10-26 (user request; see the decision log). Code: `src/utils/lunarSky.ts`,
+`src/utils/skyVisibility.ts`; positions from astronomy-engine (DATA_SOURCES SRC-022), checked
+against JPL Horizons (SRC-019).
+
+1. **Range:** the time bar's 29.5 days (one synodic month), centred on noon UTC of the app time's
+   day. It moves a day at a time, so everything is recomputed once per day of app time, and when
+   the lander or the site list changes; never on every clock tick.
+2. **Sampling:** one sample per whole hour (about 708 in the range). Each sample is the Sun's and
+   the Earth's elevation above the site's horizon on a smooth sphere of radius 1737.4 km (no
+   terrain), measured from the site, so the Earth's parallax is included.
+3. **Landing windows:** the hours with the Sun up and, for a lander without a relay, the Earth up
+   too, merged into continuous intervals (hour resolution). They are found up to 15 days beyond
+   the range, so a window keeps its true start and end. A lander with a relay only needs the Sun.
+   A window still open at the first or last hour sampled (a long polar day, longer than the
+   sampled span) is marked **open-ended** (2026-11-12): its start or end is only where checking
+   stopped, so it is shown as "before …" or "after …", its length as "over N days", and it has
+   no closing countdown.
+4. **Best window:** the window with the most time inside the range (judged inside the range, like
+   the daylight gate, so a window that mostly fell before it does not win), shown with its start, end
+   and length in days (in the best-match card for the best site, and in Site details for the
+   selected one). The time bar shows the selected site's windows; while one is open its countdown
+   reads "Window open – closes in Xd Yh".
+
+**DEMO thresholds per lander** (made up, labelled DEMO in the UI):
+
+| Demo mission | `minSunElevationDeg` | `minEarthElevationDeg` | `daysNeeded` | `hasRelay` |
+| ------------ | -------------------- | ---------------------- | ------------ | ---------- |
+| A            | 5°                   | 5°                     | 3            | No         |
+| B            | 1°                   | 1°                     | 6            | Yes        |
+| C            | 10°                  | 10°                    | 2            | No         |
+
+**Classification:** Sun and Earth positions **Verified** (Horizons, within 0.01°); gates'
+thresholds, sites, weights and rating cut-offs **Illustrative** (DEMO); smooth-sphere horizon an
+**Assumption** (KNOWN_ISSUES KI-014: no terrain shadows or local horizons).
+
+**Limitations:** no terrain (a crater rim can hide the Sun or Earth for real); elevation of the
+body's centre (no Sun disc radius); hour resolution; shares and stretches depend on where the
+range falls in the month, so scores move a little as the date changes.
+
+### Terrain horizon (TEST, 2026-11-13, local testing only)
+
+For a site with a terrain horizon (`src/data/terrainHorizons.ts`), the Sun or the Earth counts as
+up only when its centre is at or above **both** the mission's minimum height **and** the terrain
+horizon in its direction (`horizonAt`, linear between whole degrees). This applies to every check,
+share and window for that site (Sites list, Site details, Other dates, the assistant's answers).
+Points and sites without a horizon keep the smooth-sphere horizon.
+
+- **Horizon:** for each whole azimuth, the highest angle of the terrain seen from the site's
+  ground, out to 250 km or the edge of the elevation map, in true 3D on the 1737.4 km sphere
+  (curvature included). Computed offline by `scripts/data/horizon_profile.py`.
+- **Data (TEST):** a QGIS export of the LOLA south-polar elevation map `LDEM_80S_80MPP_ADJ` (80 m
+  per pixel, 80° S to the pole). Its source is **not yet recorded** in `DATA_SOURCES.md`, so it
+  must not be committed or deployed until it is: the generated `src/data/terrainHorizons.ts` is
+  git-ignored and loaded only if present (`import.meta.glob`), so without it every site keeps the
+  smooth horizon. Only Demo Site India lies inside the map.
+- **Limitations:** 80 m pixels (smaller rocks and rims are missed); the Sun's centre, not its disc;
+  the site's own slope counts as terrain; no light bounced from terrain.
+
+### Elevation and slope at a point (built 2026-11-13; no data loaded yet)
+
+A clicked or typed point inside the covered south-pole area gets its **elevation and slope** from
+a LOLA elevation file, once one is loaded. **Facts only:** no pass/fail until a sourced slope limit
+exists for each lander. Code: `src/utils/elevationGrid.ts` (pure), `src/services/elevationData.ts`
+(loading), `scripts/data/elevation_grid.py` (offline). How to load a file: `docs/ELEVATION_DATA.md`.
+
+- **The file:** heights in metres ("surface height (in meters)", SRC-048) on a south polar
+  stereographic grid (centre 90° S, longitude 0° up, scale 1 at the pole, projection radius
+  1737.4 km, SRC-049), as NASA PGDA publishes them. Heights are above the reference sphere; that
+  it is 1737.4 km is stated only for the older, unadjusted version (SRC-053), so for the adjusted
+  files it is an **Assumption** until confirmed. The offline script checks the projection and units
+  and stops on anything else; it cuts the file to the south-pole area and averages it down to a
+  small grid (plain binary plus a JSON description with the projection, grid and source).
+- **Point to grid:** x = ρ·sin(lon), y = ρ·cos(lon), ρ = 2R·tan(45° + lat/2), R = 1737.4 km.
+- **Elevation:** bilinear between the four nearest grid heights.
+- **Slope:** Horn's method on the 3 × 3 heights around the nearest grid point: east-west gradient
+  ((c + 2f + i) − (a + 2d + g)) ÷ 8Δ, north-south gradient ((g + 2h + i) − (a + 2b + c)) ÷ 8Δ,
+  slope = atan of their combined size. Δ is the true ground spacing: the grid spacing divided by
+  the projection's scale k = 2 ÷ (1 + sin|lat|). The slope is over the grid's spacing (shown with
+  it), so it smooths anything smaller.
+- **Shown:** on the place card, "Elevation X m · Slope Y°" with the source and pixel size; "No
+  elevation data loaded yet" with no file; "No elevation data here" outside the area or on gaps.
+  "Elevation" and "Slope" map layers stay off, with the same note, until a file is loaded; their
+  colours are a continuous scale, never pass/fail colours.
+- **Tests use made-up grids only** (a flat plane, a known tilted plane and a bowl, built inside the
+  tests). No made-up grid is ever shown in the app or committed as data.
+
+### Power check (Miral's Moon power lab; agreed 2026-11-13)
+
+A teaching model in Site details, credited to **Miral** (the team's power lab,
+`docs/team/Moon power lab (4).html`), rebuilt in React. **Information only:** it never changes a
+check, the order of the list or a window. Code: `src/data/powerCheck.ts`,
+`src/features/lunar-map/PowerCheck.tsx`.
+
+- **From the app:** the Sun's height at the place at the app's time (its centre, smooth-sphere
+  horizon); the **night** = the longest unbroken stretch inside the checked month (the time bar's
+  range) with the Sun's centre below 0°, from the hourly samples. A night that reaches the edge of
+  the month is only a lower bound ("at least").
+- **Sliders (teaching defaults, labelled so):** panel flat or standing; area 0.5–4 m² (default 1);
+  heater 5–100 W (default 20); battery 5–200 kg (default 30).
+- **Panel power** = 1361 W/m² × area × 0.30 × angle factor. Flat panel: sin(Sun height). Standing
+  panel facing the Sun: cos(Sun height). Both are 0 while the Sun is down. (The team file uses 1
+  for the standing panel, which is wrong when the Sun is high; not copied.)
+- **Battery needed (kg)** = heater W × night hours ÷ 143 Wh/kg. "Survives the night" when the
+  battery is at least that; otherwise "Needs X kg more" (X rounded up to 0.1 kg).
+- **Sources:** 1361 W/m² SRC-044 (NASA Moon Fact Sheet); 0.30 SRC-045 (NASA small-spacecraft
+  report, "nominal efficiency of 30%"); 143 Wh/kg **derived** from SRC-046 (LuSEE-Night's planned
+  7160 Wh battery of 50 kg; DATA_SOURCES conflicts 13 and 14). Using that one battery figure for
+  every mission is a **team assumption**.
+- **Labelled a simplified model:** no shadows or terrain, no panel losses (heat, dust, wiring,
+  pointing), only the heater draws power at night, and the battery figure is a minimum (no
+  reserve).
+
+### Anywhere on the Moon (point check)
+
+Agreed 2026-11-10; simplified 2026-11-11. Clicking any point on the Moon that is not a site, or
+typing its coordinates, gives that point **exactly the checks a site gets** (above), from the same
+hourly samples and range, plus the nearest demo site and its great-circle distance (mean sphere).
+A point is not put in the Sites list or in Compare. Code: `src/data/pointCheck.ts`;
+`src/utils/lunarSky.ts` (`greatCircleKm`).
+
+**Classification:** the Sun and Earth geometry **Verified** (as above); the mission needs
+**Illustrative** (DEMO).
+
+### "Launch slipped" assistant (agreed 2026-11-12)
+
+An optional text box in the Mission view. It never decides or calculates anything: it only reads
+the user's text into the settings the app already has. Code: `api/slip.ts` (server),
+`src/services/slipReading.ts` and `slipApi.ts` (the reply's shape and the call),
+`src/features/missions/slipPlan.ts` (the app's checks and date maths),
+`src/features/missions/SlipAssistant.tsx` (the box).
+
+1. **What the AI may return** (every field may be null): the mission name exactly as typed; a date
+   shift (`{ shift, unit }`, unit days, weeks, months or years) **or** a date (day or null, month,
+   year or null); days of power; lowest Sun height; lowest Earth height; relay yes or no; and
+   "unclear" quotes. Google Gemini, free tier, Flash model (`gemini-3.6-flash` by default), with a
+   strict JSON schema.
+2. **What the app accepts** (anything else is dropped and the user is told so):
+   - every number (shift, day, year, needs) must appear in the user's text, as digits or as an
+     English word from one to twenty ("a"/"an" counts as 1 only before day, week, month, year or
+     degree). Other scripts and number words are not read (English only);
+   - the shift's unit word and the month (its name, short name or number) must appear in the text;
+   - relay is read only when the text contains the word "relay";
+   - the mission name and every "unclear" quote must appear word for word in the text.
+3. **Ranges:** the needs go through the Mission form's own check (`validateDraft`, the DEMO
+   ranges). An out-of-range value is shown with its error and never changed; Apply stays off.
+4. **Dates (all UTC, all worked out by the app):** a shift counts from the time bar's date (whole
+   calendar months and years, the day kept or moved to the month's last day); a day is 00:00 UTC
+   that day; a month alone is the 15th at 00:00 UTC, so the 29.5-day range covers the month; a
+   missing year is the next one on or after the time bar's month (and day). Impossible dates, dates
+   outside 1990–2100, part months or years, and both a shift and a date are errors.
+5. **Missions:** the app matches the typed name against its own list (ignoring case, spacing and a
+   leading "Demo"). No name means the selected mission. An unknown name shows "{name} isn't in our
+   list yet, add its details"; "Add its details" opens the Add-your-own-mission form with the name
+   and the numbers from the text, every other field empty. The AI never supplies a lander's
+   specifications.
+6. **Confirmation:** "I read this as …" (the full UTC date and every need, changed or not) shows
+   before anything changes. **Apply** uses it (a changed need makes a new mission for this visit,
+   e.g. "Demo Mission A (2)"; the demo missions are never edited); **Edit** opens the Mission form
+   with the same values and date.
+7. **The explanation** is a fixed sentence filled from the app's own results after Apply (the site
+   with the longest usable window, its length and dates, and how many demo sites pass all the checks
+   over the time bar's range). No AI-written text is shown.
+8. **Failure:** no key, no network, a timeout, a refusal or a malformed reply all end the same way:
+   "The assistant isn't available right now", and the Mission form (which has a date field) does
+   the same job by hand.
+9. **Questions about when or where to land (agreed 2026-11-12).** The AI may also say that the
+   text asks _when_ or _where_ to land (`question: { about, siteName, from, to }`); it never
+   answers. The app answers from its own results (`src/features/missions/slipQuestion.ts`):
+   - **Months:** `from` and `to` are calendar months (UTC, from the 1st 00:00 to the end of the
+     last day). A month must appear in the text (name, short name or number) and a year must be
+     typed to be used; a missing year means the next time that month starts on or after the time
+     bar's month (the current month counts), and `to` is the first such month on or after `from`.
+     One month alone means that month. No month: _where_ uses the time bar's range (as the Sites
+     list does); _when_ uses the six ranges from the time bar's range on (as Other dates does). At
+     most 12 months; dates outside 1990–2100 are errors.
+   - **Site:** a site name must appear in the text and match a demo site (ignoring case, spacing
+     and a leading "Demo"); otherwise every demo site is checked and the user is told why.
+   - **Answer:** the same checks as everywhere (`siteSky`, `assessSky`): with a named site, that
+     site's best window over the months and whether it passes all the checks; otherwise the best site
+     (`bestDemoSite`: the suitable site with the longest usable window) and its best window. The
+     mission is the one named in the text if it is in the list, otherwise the selected one.
+     **Go there** selects the site and moves the time bar to the window's start. The answer is a
+     fixed layout filled from the app's numbers; no AI-written text is shown.
+   - **Past months (2026-11-13):** allowed. When every month asked about has ended (by the real
+     clock), the answer says "in the past"; when only some have, "partly in the past".
+   - **Three more questions (2026-11-13),** read the same way (the AI only names the kind of
+     question, the site and the months; the app answers over the months asked, or the time bar's
+     range when none are given, with the same `siteSky`/`assessSky` as the Sites list):
+     - _How many days of sunlight at X?_ (`about: "sunlight"`): the longest unbroken stretch with
+       the Sun at or above the mission's minimum, and the total time it is up. Needs a named demo
+       site; without one the app asks for it.
+     - _Which site has the most Earth time?_ (`about: "earth"`): the demo site with the largest
+       share of time with the Earth at or above the mission's minimum (ties by name), with that
+       share.
+     - _Does X pass for Mission Y?_ (`about: "passes"`): whether the named site passes all the
+       checks for the mission named in the text (or the selected one), each failure named, and the
+       % of mission needs met. Needs a named demo site.
+   - Any other question ("how much power does it need?") is not read: it goes under "Couldn't
+     read", and the box says what it can read.
+10. **Examples:** clickable example sentences under the box fill it in and read it at once.
+11. **Nothing changed (2026-11-13):** when the text was read but changes no setting, the box says
+    so plainly ("Nothing changed: …") and gives an example of what it can read.
+
+## Decision log
+
+| Date       | Decision                                                                                                                                                                                                                                                                                                                                                                                                                              | Rationale                                                                                                                                                                    | Agreed by                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 2026-10-25 | Demo fixture: add a made-up "Earth visibility" factor (5th factor; weights rebalanced to 1)                                                                                                                                                                                                                                                                                                                                           | The redesigned Site details shows an Earth visibility bar; to be replaced by a real calculation                                                                              | User (practice)                                 |
+| 2026-10-25 | Demo fixture: rating-word cut-offs 55 / 35 instead of the planned 70 / 40                                                                                                                                                                                                                                                                                                                                                             | With 70 / 40 no demo site ever reached "Great"                                                                                                                               | Main session; reported to user                  |
+| 2026-10-26 | Demo fixture: Sunlight and Earth visibility become shares of the time-bar range from the real Sun and Earth; windows computed from both; made-up per-lander minimum elevations; made-up windows removed                                                                                                                                                                                                                               | Requested by the user ("make time real"); method above                                                                                                                       | User (practice)                                 |
+| 2026-10-26 | Demo fixture: `minSunlightPct` now a share of the range; C lowered from 55 to 42                                                                                                                                                                                                                                                                                                                                                      | Real shares are about 39–50% for most sites, so 55 excluded every site for C                                                                                                 | Main session; reported to user                  |
+| 2026-10-26 | Demo fixture: add Demo Site India (85.5° S, 31° E, made up)                                                                                                                                                                                                                                                                                                                                                                           | Lets the south-polar Earth drop (libration) be seen; no real site implied                                                                                                    | Main session; reported to user                  |
+| 2026-10-26 | Excluded sites show "Excluded" and the reason instead of a score                                                                                                                                                                                                                                                                                                                                                                      | A number next to a ranked list read as a rank it does not have                                                                                                               | User (practice)                                 |
+| 2026-10-26 | Gates: slope, temperature, Earth contact (new; `hasRelay`: A no, B yes, C no) and daylight (changed: longest continuous sunlit stretch ≥ `daysNeeded`, replacing the sunlight-share gate)                                                                                                                                                                                                                                             | Stage 1 of the gate upgrade, requested by the user                                                                                                                           | User (practice)                                 |
+| 2026-10-26 | Demo fixture: C's `minSunlightPct` restored to 55 (the 42 change is undone)                                                                                                                                                                                                                                                                                                                                                           | The share is no longer a gate, so the earlier reason for lowering it is gone                                                                                                 | User (practice)                                 |
+| 2026-10-26 | Weighted score: one `DEMO_WEIGHTS` constant for every lander (placeholders until the research team's rules sheet; per-lander weights removed); Sunlight factor = longest stretch ÷ days needed, capped at 100; `minSunlightPct` removed                                                                                                                                                                                               | Stage 2 of the gate upgrade, requested by the user                                                                                                                           | User (practice)                                 |
+| 2026-10-26 | Every result carries `decidedBy` (first failed gate, or the factor costing the most points), shown in the Site details summary                                                                                                                                                                                                                                                                                                        | Says in one line why a site landed where it did                                                                                                                              | User (practice)                                 |
+| 2026-10-26 | Windows need the Earth only for landers without a relay; the best window is the one with the most time inside the range                                                                                                                                                                                                                                                                                                               | Stage 2, requested by the user                                                                                                                                               | User (practice)                                 |
+| 2026-10-27 | Sunlight factor becomes Daylight margin: usable stretch ÷ days needed, 1× = 50, 3× or more = 100, linear between                                                                                                                                                                                                                                                                                                                      | Every eligible site scored 100% on sunlight, so the factor changed nothing                                                                                                   | User (practice)                                 |
+| 2026-10-27 | Daylight gate uses the window rule: Sun only with a relay; Sun and Earth both up without one ("Not enough time with Sun and Earth both up")                                                                                                                                                                                                                                                                                           | A no-relay lander could pass every gate with no usable window (QA finding)                                                                                                   | User (practice)                                 |
+| 2026-10-27 | Excluded sites show only the reason and the failed gate values; no factor bars or weight table                                                                                                                                                                                                                                                                                                                                        | An excluded site has no score, so its factor breakdown read as one                                                                                                           | User (practice)                                 |
+| 2026-10-28 | "Add your own lander": the user sets max slope, days needed, temperature range, relay and ellipse length within DEMO ranges (no zero days, no zero or negative slope, coldest not above hottest); Sun and Earth minimum heights come from the chosen preset. Scored with the same gates and weights                                                                                                                                   | Lets the team try lander limits without new scoring inputs; values are the user's, sites stay DEMO                                                                           | User (practice)                                 |
+| 2026-10-28 | Landing area check: DEMO `safeAreaKm` per site vs the lander's ellipse; Fits ≥ 1.5×, Tight ≥ 1×, Does not fit < 1×; information only, never scored                                                                                                                                                                                                                                                                                    | Shows whether the landing uncertainty fits the site, without new scoring inputs                                                                                              | User (practice)                                 |
+| 2026-11-10 | "Anywhere on the Moon": clicking any point checks only the Earth-contact and daylight gates with the lander's DEMO thresholds from the real Sun and Earth; slope and temperature are "needs data"; never scored or ranked; nearest demo site shown with its distance                                                                                                                                                                  | The app's standout feature for the event: a live answer for any spot, honest about what it cannot know                                                                       | User (practice)                                 |
+| 2026-11-11 | Concept refocused on the challenge: power and comms windows, the Sun and Earth against the horizon, sunset and Earthset, and other dates. The weighted score, rating words, slope and temperature gates, what-changed comparison and landing area check are retired; landers become mission needs (min Sun height, days of power, min Earth height, relay); sites are listed by longest usable window (or sunlight, Earth time, name) | The challenge asks for site and date comparison of power and DTE windows, not a score; the score rested on made-up values and placeholder weights                            | User                                            |
+| 2026-11-11 | Lessons from past landings: real missions (IM-1, IM-2, SLIM, Chandrayaan-3, Blue Ghost M1), facts only as stated by SRC-023 to SRC-036                                                                                                                                                                                                                                                                                                | Replaces the placeholder Replay; ties real outcomes to sunlight, the Earth and the lunar night                                                                               | User                                            |
+| 2026-11-12 | **CLAUDE.md exception 1 of 2 (see also exception 3): one Vercel server function, `api/slip.ts`**, for the "launch slipped" assistant. It holds the AI key in `GEMINI_API_KEY` (server only, never a `VITE_` variable), accepts only `{ text }` of up to 500 characters, keeps no memory and stores nothing the user typed. The site works fully without it (the Mission form is the fallback)                                         | The key must never reach the browser; a backend is otherwise not allowed (CLAUDE.md)                                                                                         | Team (approved via the user)                    |
+| 2026-11-12 | **CLAUDE.md exception 2 of 2 (see also exception 3): the Google Gemini API (free tier, a Flash model)**, called with plain `fetch` from `api/slip.ts`; no new npm package. Strict JSON output, about 20 seconds (was 10; raised after the first live test, see the 2026-11-12 timing row), at most one retry. The About page says the free tier may use typed text to improve Google's models                                         | Reads a slip description into the existing mission settings; paid APIs are otherwise not allowed (CLAUDE.md)                                                                 | Team (approved via the user)                    |
+| 2026-11-12 | Display fixes from the whole-site review (no rule changed): "best" means the longest usable window in every order; open-ended windows say "before"/"after"/"over" and have no closing countdown; a site's card says how much of its best window falls in this month                                                                                                                                                                   | A sort by name or sunlight made the alphabetically first site "best"; a long polar day was shown with made-up ends; the clipped month count read as contradicting the window | Main session; reported to user                  |
+| 2026-11-12 | "Launch slipped" assistant, version 1: the AI only reads the user's text into fields (mission name as typed, a date shift or a day/month/year, days of power, min Sun height, min Earth height, relay, "unclear"). The app checks every value, does all date maths in UTC, matches mission names, and shows "I read this as …" before anything changes; the explanation is a fixed sentence filled from the app's own results         | Every number on screen is the user's or the app's, never the AI's (rules in "Launch slipped assistant" above)                                                                | User                                            |
+| 2026-11-12 | Assistant timing and outcome log: the server limit goes from 9 s to 20 s and the browser's from 10 s to 22 s; each request that reaches Gemini logs one line on Vercel (HTTP status, each try's Gemini status or stop reason and milliseconds, total time; never the typed text)                                                                                                                                                      | The first live test timed out (HTTP 504) on three ordinary sentences, and the logs could not tell a slow reply from an overloaded one                                        | User (reported "it doesn't work"); main session |
+| 2026-11-12 | "Launch slipped" assistant reads questions about **when or where to land** (rule 9 above): the AI only says what is asked (when/where, a site name, months), the app checks each against the text and answers with its own `siteSky`/`assessSky`/`bestDemoSite` results; clickable example sentences (rule 10)                                                                                                                        | Users and judges type questions ("what is the best date between oct and november"); the app already knows the answer, so the AI only has to route it                         | User                                            |
+| 2026-11-12 | **CLAUDE.md exception 3: offline data scripts** in `scripts/data/` (Python with rasterio/GDAL, versions pinned in `scripts/data/requirements.txt`) to prepare LOLA slope and terrain data. They run only on team laptops, are never shipped to the browser, and output small data files with sources in `DATA_SOURCES.md`                                                                                                             | LOLA rasters are large and need GIS tools; preparing them offline adds no runtime dependency and keeps the browser download small                                            | User                                            |
+| 2026-11-12 | **% of mission needs met** (definition above): longest usable window ÷ power days needed, capped at 100%; below 100% shows the percentage and what's missing, at 100% the window length and how many times over the need. The Sites list stays ordered by longest usable window. Not built yet                                                                                                                                        | Ranks in real units, with no weights, and says how close a failing site comes                                                                                                | User                                            |
+| 2026-11-12 | The **slope check** (retired 2026-11-11) comes back only with real LOLA data, prepared by the offline scripts and sourced in `DATA_SOURCES.md`; never with demo values                                                                                                                                                                                                                                                                | The retired slope gate rested on made-up site slopes                                                                                                                         | User                                            |
+| 2026-11-13 | **TEST, local only:** terrain horizon from a QGIS export of LOLA `LDEM_80S_80MPP_ADJ` for Demo Site India; the Sun and Earth count as up only above both the mission's minimum and the terrain (rule above). Not to be committed or deployed until the source is in `DATA_SOURCES.md`                                                                                                                                                 | A flat horizon called a site on a steep mountainside "OK"; the team wants to see real terrain in the app                                                                     | User                                            |
+| 2026-11-13 | Checks split into three named for what they measure: **Power** = the Sun only, **Comms** = the Earth only, **Usable window** = both (the Sun only with a relay, then not listed separately). Same places pass as before; Compare gets one row per check                                                                                                                                                                               | Compare's Power row described the Sun-and-Earth stretch; each row now says what it measures (overnight plan item 2)                                                          | User                                            |
+| 2026-11-13 | "Launch slipped" assistant: past months allowed and labelled "in the past"; three more questions read by the AI and answered by the app (days of sunlight at a site, the site with the most Earth time, does a site pass for a mission); a plain "Nothing changed" with an example (rules 9 and 11)                                                                                                                                   | Overnight plan item 4: users ask these; the app already has every answer, so the AI only routes the question                                                                 | User                                            |
+| 2026-11-13 | Power check in Site details from Miral's Moon power lab (rule above): information only; panel W = 1361 × area × 0.30 × sin or cos of the Sun height; battery kg = heater W × night hours ÷ 143; sliders with teaching defaults; sources SRC-044 to SRC-046                                                                                                                                                                            | Overnight plan item 9: shows the panel and battery trade-off behind the power check, with the app's own Sun height and night length                                          | User                                            |
+| 2026-11-13 | Elevation and slope at a point (rule above): built with no data; a PGDA south-pole LOLA GeoTIFF becomes a small grid offline (scripts/data/elevation_grid.py); slope by Horn's method over the grid spacing; facts only, no pass/fail; layers off until a file is loaded                                                                                                                                                              | Overnight plan item 7 (replaced): ready for the real file, so loading it is one command; no slope limit is sourced yet                                                       | User                                            |

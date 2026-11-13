@@ -1,0 +1,36 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--color-text-faint);
+  font-size: var(--font-size-caption);
+}
+
+.note a {
+  color: var(--color-text-muted);
+  text-underline-offset: 3px;
+}
+
+.note a:hover {
+  color: var(--color-text);
+}

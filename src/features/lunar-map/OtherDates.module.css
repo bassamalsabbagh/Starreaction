@@ -1,0 +1,65 @@
+/* One row per month: when, its best window, and Go. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.when,
+.window {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.when {
+  font-weight: 600;
+}
+
+.sub {
+  color: var(--color-text-faint);
+  font-weight: 400;
+}
+
+.go {
+  min-width: 40px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition-property: background-color, border-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.go:hover {
+  border-color: var(--color-text-faint);
+  background: var(--color-panel-raised);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .go:active {
+    scale: 0.96;
+  }
+}

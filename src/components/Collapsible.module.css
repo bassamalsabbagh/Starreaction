@@ -1,0 +1,110 @@
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  font: inherit;
+}
+
+/* The whole header row is the target: 36px tall, the caret optically aligned to the text edge. */
+.toggle {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 36px;
+  margin-left: -2px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 120ms ease-out;
+}
+
+.toggle:hover {
+  color: var(--color-text);
+}
+
+.variantLabel .title {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+}
+
+.variantBody .title {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.meta {
+  flex: none;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-caption);
+  font-weight: 400;
+}
+
+.caret {
+  flex: none;
+  transition:
+    transform 200ms var(--ease-out),
+    scale 120ms var(--ease-out);
+}
+
+.caretOpen {
+  transform: rotate(90deg);
+}
+
+/* Height animation without measuring: the grid row goes from 0fr to 1fr. */
+.collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms var(--ease-out);
+}
+
+.collapseOpen {
+  grid-template-rows: 1fr;
+}
+
+/* Clips while collapsed; the padding keeps focus rings inside the clip. Hidden once closed, so
+   the padding never shows a sliver of the first row. */
+.inner {
+  min-height: 0;
+  margin: -3px;
+  padding: 3px;
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s linear 200ms;
+}
+
+.collapseOpen .inner {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret,
+  .collapse,
+  .inner {
+    transition: none;
+  }
+}

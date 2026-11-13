@@ -1,0 +1,80 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.tip {
+  position: absolute;
+  z-index: 60;
+  width: max-content;
+  max-width: 18rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.45;
+  text-align: left;
+  text-transform: none;
+  text-wrap: pretty;
+  white-space: normal;
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease-out,
+    visibility 0s linear 120ms;
+}
+
+.below {
+  top: calc(100% + var(--space-2));
+}
+
+.above {
+  bottom: calc(100% + var(--space-2));
+}
+
+.start {
+  left: 0;
+}
+
+.center {
+  left: 50%;
+  translate: -50% 0;
+}
+
+.end {
+  right: 0;
+}
+
+/* Beside the trigger, on its left (the map's right-edge column). Overrides the alignment. */
+.left {
+  top: 50%;
+  right: calc(100% + var(--space-2));
+  left: auto;
+  translate: 0 -50%;
+}
+
+.wrap:hover .tip,
+.wrap:has(:focus-visible) .tip {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.wrap .off,
+.wrap:hover .off,
+.wrap:has(:focus-visible) .off {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    transition: none;
+  }
+}

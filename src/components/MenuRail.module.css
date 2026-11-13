@@ -1,0 +1,114 @@
+/* The rail: a slim solid column on the far left, from under the top row to the bottom edge. */
+.rail {
+  composes: panel from '../styles/glass.module.css';
+  position: absolute;
+  top: var(--top-bar-height);
+  bottom: var(--space-4);
+  left: var(--panel-gap);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  width: var(--rail-width);
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The actions (Demo, About): pushed to the foot, under a hairline, apart from the views. */
+.actions {
+  margin-top: auto;
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Icon over a short label; the whole tile is the target (56 × 52 px). */
+.item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-1) 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+  transition-property: color, background-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.item:hover {
+  background: var(--color-panel-raised);
+  color: var(--color-text);
+}
+
+.label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* The active view: off-white, with the orange marker on the rail's outer edge. */
+.active {
+  background: var(--color-panel-raised);
+  color: var(--color-text);
+}
+
+.active::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: calc(var(--space-1) * -1);
+  width: 3px;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  background: var(--color-accent);
+}
+
+.count {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-text);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Press: the whole tile gives a little (0.96), as every button does. */
+@media (prefers-reduced-motion: no-preference) {
+  .item {
+    transition-property: color, background-color, scale;
+  }
+
+  .item:active {
+    scale: 0.96;
+  }
+}
+
+.item:focus-visible {
+  outline-offset: -2px;
+}

@@ -1,0 +1,203 @@
+/* Design tokens. Components use these via CSS Modules; avoid hard-coded colors elsewhere. */
+:root {
+  /* A neutral space palette: near-black panels, off-white text, greys for the rest. */
+  --color-bg: #0c0d0f;
+  --color-surface: #16171a;
+  --color-border: #2a2c31;
+  --color-text: #eceae6;
+  --color-text-muted: #a9a8a4;
+  /* The one accent: StarReaction orange (the logo). Used sparingly: the selected state, the
+     best-match marker, small active details. Never a large fill. */
+  --color-accent: #ffb347;
+  --color-highlight: var(--color-accent);
+  /* Focus rings: off-white, so the accent stays rare. */
+  --color-focus: var(--color-text);
+  --color-on-primary: #0c0d0f;
+
+  /* Workspace additions. Text colours are chosen for WCAG AA (>= 4.5:1) on bg and surfaces. */
+  --color-border-strong: #3c3e44;
+  /* Lightened from #8e8d89 (2026-11-13) so the smallest grey text survives a projector; still
+     below the muted grey, so the order of emphasis is the same. */
+  --color-text-faint: #9a9995;
+  /* Presentation mode on a projector (App.module.css .presenting): lighter greys. */
+  --color-text-muted-projector: #c6c4bf;
+  --color-text-faint-projector: #b5b3ae;
+  --color-status-placeholder: #e9b763;
+  --color-status-provisional: #c3a8ff;
+  --color-status-unavailable: #a3a9b7;
+  /* Practice-only: marks made-up demo data (src/data/demoData.ts). */
+  --color-status-demo: #ff9e8a;
+
+  /* Floating panels: solid near-black, a subtle 1px edge and a small shadow. No backdrop blur:
+     it would be redrawn on every frame of the moving Moon. (The "glass" names are kept so every
+     existing panel picks the solid look up at once.) */
+  --color-panel: #0e0f11;
+  --color-panel-raised: #18191c;
+  --color-placeholder-surface: #5c5d61;
+  /* Map lines (the grid, the outlines): a quiet off-white, not a colour. */
+  --color-marker: #d8d5ce;
+  /* The Sun's glow in the map's space view (a warm white, drawn into a canvas). */
+  --color-sun-glow: #fff1d6;
+  --glass-fill: var(--color-panel);
+  --glass-edge: #26282c;
+  --glass-sheen: rgb(255 255 255 / 0.03);
+  --glass-fill-dock: var(--color-panel);
+
+  /* A dark rim for marks drawn straight on the Moon (the selection ring), and the dim behind
+     the tour and About. */
+  --color-halo: rgb(0 0 0 / 0.6);
+  --color-scrim: rgb(2 4 9 / 0.62);
+
+  /* Map surround: black space, darker than the panels. */
+  --color-space: #020203;
+
+  /* Score words (Great / OK / Poor). Always shown with the word, never colour alone. Each is
+     >= 7:1 on --color-bg, so they also work as text. */
+  --color-score-great: #5fd49a;
+  --color-score-ok: #f0c75e;
+  --color-score-poor: #ff7b72;
+  --color-pin-excluded: #8e8d89;
+  --color-pin-text: #0c0d0f;
+
+  /* Clock modes and form errors. Live and Simulated always travel with their word. Live is green
+     (the one exception to green meaning Great); Simulated has an orange outline. */
+  --color-live: var(--color-score-great);
+  --color-simulated: var(--color-accent);
+  --color-error: #ff7b72;
+  /* Demo landing windows on the time bar: teal, so they never read as a score or as Live. */
+  --color-window: #4fc9c0;
+  /* The Sun and the Earth in the horizon view: a warm yellow and a pale blue, always with their
+     names beside them (never colour alone). Both are > 9:1 on the panel. */
+  --color-sun: #ffd27a;
+  --color-earth: #9cc3ff;
+  /* The ground below the horizon in the horizon view. */
+  --color-ground: #1b1c20;
+
+  /* Elevation for things that float over the map; docked chrome casts no shadow. */
+  --shadow-tip: 0 2px 8px rgb(0 0 0 / 0.35);
+  --shadow-float: 0 2px 10px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-modal: 0 16px 40px rgb(0 0 0 / 0.5);
+
+  /* The wordmark (About panel): "Star" in white, "Reaction" in the team's orange. */
+  --color-brand-star: #ffffff;
+  --color-brand-reaction: #ffb347;
+  /* The zoom readout: three short lines under the map buttons. */
+  --map-readout-height: 3.75rem;
+  --map-readout-width: 8.75rem;
+  /* The map buttons in the bottom-right corner; the time bar stops short of their column. */
+  --map-control-size: 40px;
+  /* The floating top row (logo and breadcrumb, the DEMO pill and About), margin included. */
+  --top-bar-height: 4.25rem;
+  /* The menu rail on the far left, and the one floating panel beside it; Compare may be wider. */
+  --rail-width: 4rem;
+  --panel-width: 24rem;
+  --panel-gap: var(--space-3);
+  /* The time bar's height, open and folded to a line; overlays above it stack on top. */
+  --time-bar-height: 6rem;
+  --time-bar-folded-height: 2.25rem;
+  /* The status line (lander, clock, Sun and Earth) just above the time bar. */
+  --status-line-height: 2.5rem;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* One pace for everything that slides or fades (the panel, the map framing): 250 ms. */
+  --duration-panel: 250ms;
+
+  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* One family: numbers use it too, with tabular figures (the name is kept for existing rules). */
+  --font-family-mono: var(--font-family);
+  /* The one type scale: 12 / 13 / 15 (base text) / 16 / 18 / 22 / 28 px. */
+  --font-size-xs: 0.75rem;
+  --font-size-caption: 0.8125rem;
+  --font-size-sm: 0.9375rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-title: 1.375rem;
+  /* Large numeric readouts only (the selected site's score). */
+  --font-size-readout: 1.75rem;
+  --letter-spacing-label: 0.14em;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  /* Floating panels and the toolbar pill. */
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Component display rules (flex, grid) must not defeat the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p,
+li,
+dd {
+  text-wrap: pretty;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-text) 25%, transparent);
+  color: var(--color-text);
+}
+
+/* Text for assistive technology only. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

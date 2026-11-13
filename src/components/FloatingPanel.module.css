@@ -1,0 +1,108 @@
+/* Beside the rail, below the top row, above the bottom stack (status line and time bar). The dock
+   slides as one piece; the handle rides on its right edge. */
+.dock {
+  position: absolute;
+  top: var(--top-bar-height);
+  left: calc(var(--panel-gap) + var(--rail-width) + var(--space-2));
+  z-index: 30;
+  display: flex;
+  width: min(var(--panel-width), calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem));
+  max-height: calc(100dvh - var(--top-bar-height) - var(--bottom-stack, 9rem) - var(--space-3));
+  /* Closed: behind the rail (which sits above it), only the handle showing. */
+  transform: translateX(calc(-100% - var(--space-2)));
+}
+
+.open {
+  transform: none;
+}
+
+.wide {
+  width: min(
+    var(--compare-width, 46rem),
+    calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem)
+  );
+}
+
+.panel {
+  composes: panel from '../styles/glass.module.css';
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.dock:not(.open) .panel {
+  opacity: 0;
+}
+
+/* The handle: a tab on the panel's right edge, ‹ or ›. Always there, so the panel comes back. */
+.handle {
+  composes: panel from '../styles/glass.module.css';
+  position: absolute;
+  top: var(--space-4);
+  left: 100%;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 48px;
+  margin-left: -1px;
+  padding: 0;
+  /* Open, its left edge merges into the panel (the fill covers the transparent border). */
+  border-left-color: transparent;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  box-shadow: var(--shadow-float);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+/* Closed, it stands on its own just right of the rail: moved by translate, not margin, so
+   nothing reflows. */
+.dock:not(.open) .handle {
+  translate: var(--space-2) 0;
+  border-left-color: var(--glass-edge);
+  border-radius: var(--radius-md);
+}
+
+.dock:not(.open) .arrow {
+  rotate: 180deg;
+}
+
+.handle:hover {
+  color: var(--color-text);
+}
+
+/* A larger target than it looks: 40 × 48 px. */
+.handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 -8px;
+}
+
+.gone {
+  visibility: hidden;
+}
+
+/* The slide, 250 ms ease-out both ways and interruptible: the dock moves, the panel fades, and
+   the handle rides along to its spot while its arrow turns. Reduced motion: all at once. */
+@media (prefers-reduced-motion: no-preference) {
+  .dock {
+    transition: transform 250ms var(--ease-out);
+  }
+
+  .panel {
+    transition: opacity 250ms var(--ease-out);
+  }
+
+  .handle {
+    transition-property: color, translate, border-color, border-radius;
+    transition-duration: 120ms, 250ms, 250ms, 250ms;
+    transition-timing-function: ease-out, var(--ease-out), var(--ease-out), var(--ease-out);
+  }
+
+  .arrow {
+    transition: rotate 250ms var(--ease-out);
+  }
+}

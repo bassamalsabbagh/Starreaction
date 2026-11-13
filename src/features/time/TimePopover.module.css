@@ -1,0 +1,146 @@
+/* Drawn at the page's top level and placed above the clock by TimePopover (left and bottom are
+   set there), so it opens upward over the map and above the left panel. */
+.popover {
+  composes: panel from '../../styles/glass.module.css';
+  position: fixed;
+  z-index: 50;
+  width: min(23.5rem, calc(100vw - 2rem));
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  box-shadow: var(--shadow-pop);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .popover {
+    animation: pop-in 150ms var(--ease-out);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.utc {
+  color: var(--color-text-faint);
+  font-weight: 400;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--space-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.fieldLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.input {
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color-scheme: dark;
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+.error {
+  margin: calc(var(--space-1) * -1) 0 0;
+  color: var(--color-error);
+  font-size: var(--font-size-caption);
+  line-height: 1.4;
+}
+
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip,
+.secondary,
+.primary {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition-property: color, border-color, background-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+}
+
+.chip:hover,
+.secondary:hover {
+  border-color: var(--color-text-faint);
+  color: var(--color-text);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+.primary {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.primary:hover {
+  background: color-mix(in srgb, var(--color-accent) 28%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip:active,
+  .secondary:active,
+  .primary:active {
+    scale: 0.96;
+  }
+
+  .chip,
+  .secondary,
+  .primary {
+    transition-property: color, border-color, background-color, scale;
+  }
+}

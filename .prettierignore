@@ -1,0 +1,16 @@
+dist
+coverage
+node_modules
+package-lock.json
+public/cesium
+.vercel
+
+# Teammates' working files, kept exactly as they delivered them
+docs/team/
+
+# Third-party Claude Code plugin files and the files they generate (not project code)
+.agents/
+.claude/skills/
+.claude/agents/impeccable-*.md
+.impeccable/critique/
+.impeccable/hook.cache.json
