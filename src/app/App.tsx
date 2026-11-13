@@ -62,6 +62,8 @@ import { LayerPanel } from '../features/lunar-map/LayerPanel';
 import { layerDisplays, previewsOnly, unshadedBelowZ } from '../features/lunar-map/mapLayerState';
 import { useLayerReading } from '../features/lunar-map/useLayerReading';
 import { useMapLayerSettings } from '../features/lunar-map/useMapLayerSettings';
+import { useVisibilityLayer } from '../features/lunar-map/useVisibilityLayer';
+import { readingSource } from '../features/lunar-map/visibilityLayer';
 import { ENGINE_LABEL, positionsLabel, positionsOf } from '../features/lunar-map/horizonsPositions';
 import { useHorizonsSeries } from '../features/lunar-map/useHorizonsSeries';
 import { StatusStrip } from '../features/time/StatusStrip';
@@ -309,12 +311,21 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     () => layerDisplays(mapLayerList, layerSettings.settings, layerFileUrl, layerPreviewOnly),
     [mapLayerList, layerSettings.settings, layerPreviewOnly],
   );
+  // The visibility prototype (docs/LANDER_RULES.md, "Visibility prototype layer"): Sun and Earth,
+  // one supplied frame per 10 minutes, snapped from the app's time. Display only.
+  const visibility = useVisibilityLayer(time);
+  const visibilityShown = visibility.display.sun.visible || visibility.display.earth.visible;
   // The globe's Sun-and-relief shading stops south of the layers' coverage while one is visible.
-  const layerShadeCutZ = unshadedBelowZ(mapLayerDisplays, MAP_LAYERS?.coverMaxLatDeg ?? -80);
+  const layerShadeCutZ = unshadedBelowZ(
+    [...mapLayerDisplays, { visible: visibilityShown }],
+    MAP_LAYERS?.coverMaxLatDeg ?? -80,
+  );
   // Layers some of whose images failed to load; switching one on again clears it (and retries).
   const [layerFailures, setLayerFailures] = useState<readonly string[]>([]);
   const toggleMapLayer = (layerId: string) => {
     setLayerFailures((ids) => ids.filter((id) => id !== layerId));
+    // A map layer switched on takes the readings, as the most recently switched-on layer.
+    if (!layerSettings.settings[layerId]?.visible) visibility.setPrefer(null);
     layerSettings.toggle(layerId);
   };
   const reportLayerFailure = useStableCallback((layerId: string) =>
@@ -325,14 +336,21 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
   const toggleLayersPanel = useStableCallback(() => setLayersOpen((open) => !open));
   // The readout: the active layer's value under the pointer (desktop) or at the tapped spot.
   const [hoverGround, setHoverGround] = useState<LatLon | null>(null);
+  const anyLayerVisible = layerSettings.anyVisible || visibility.shown.length > 0;
   // With every layer off, no hover point is kept (and no value tile is read).
-  if (!layerSettings.anyVisible && hoverGround !== null) setHoverGround(null);
-  const activeLayer = mapLayerList.find((layer) => layer.id === layerSettings.activeId) ?? null;
+  if (!anyLayerVisible && hoverGround !== null) setHoverGround(null);
+  const readingFrom = readingSource(layerSettings.activeId, visibility.shown, visibility.prefer);
+  const activeLayer =
+    readingFrom?.kind === 'map'
+      ? (mapLayerList.find((layer) => layer.id === readingFrom.id) ?? null)
+      : null;
   // A tap (the picked point) gives the reading on touch screens, where there is no hover.
-  const layerReading = useLayerReading(
-    activeLayer,
-    hoverGround ?? (layerSettings.anyVisible ? pickedPoint : null),
-  );
+  const readingPoint = hoverGround ?? (anyLayerVisible ? pickedPoint : null);
+  const layerReading = useLayerReading(activeLayer, readingPoint);
+  const visibilityTarget = readingFrom?.kind === 'visibility' ? readingFrom.target : null;
+  const visibilityReadout = visibilityTarget
+    ? visibility.readAt(visibilityTarget, readingPoint)
+    : null;
   const [imageryStatus, setImageryStatus] = useState<ImageryStatus>('loading');
   const [prefs] = useState(loadUiPrefs);
   // The left panel: which view it shows (Sites by default, or a shared site's card), and whether
@@ -1353,9 +1371,11 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 mapLayers={mapLayerDisplays}
                 onToggleLayers={mapLayerList.length > 0 ? toggleLayersPanel : undefined}
                 layersOpen={layersOpen}
-                onHoverGround={layerSettings.anyVisible ? setHoverGround : undefined}
+                onHoverGround={anyLayerVisible ? setHoverGround : undefined}
                 layerShadeCutZ={layerShadeCutZ}
                 onLayerImagesFailed={reportLayerFailure}
+                visibility={visibility.display}
+                onVisibilityState={visibility.report}
                 imageryStatus={imageryStatus}
                 onImageryStatusChange={setImageryStatus}
                 viewInsets={viewInsets}
@@ -1379,13 +1399,27 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
                 settings={layerSettings.settings}
                 onToggle={toggleMapLayer}
                 onOpacity={layerSettings.setOpacity}
-                activeId={layerSettings.activeId}
-                onActive={layerSettings.setActive}
+                activeId={activeLayer?.id ?? null}
+                onActive={(layerId) => {
+                  visibility.setPrefer(null);
+                  layerSettings.setActive(layerId);
+                }}
                 reading={layerReading}
                 onClose={() => setLayersOpen(false)}
                 sourceId={MAP_LAYERS?.sourceId ?? ''}
                 previewOnly={layerPreviewOnly}
                 failedIds={layerFailures}
+                visibility={{
+                  settings: visibility.settings,
+                  runtime: visibility.runtime,
+                  frame: visibility.frame,
+                  onToggle: visibility.toggle,
+                  onToggleTarget: visibility.toggleTarget,
+                  onOpacity: visibility.setOpacity,
+                  activeTarget: visibilityTarget,
+                  onActiveTarget: visibility.setPrefer,
+                  readout: visibilityReadout,
+                }}
               />
             </div>
           ) : null}

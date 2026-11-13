@@ -9,6 +9,14 @@ import {
   readoutText,
   type LayerSetting,
 } from './mapLayerState';
+import { VisibilityLayerItem, type VisibilityControls } from './VisibilityLayerItem';
+import {
+  TARGET_LABELS,
+  VISIBILITY_MEANING,
+  shownTargets,
+  type VisibilityReadout,
+  type VisibilityTarget,
+} from './visibilityLayer';
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
@@ -28,6 +36,15 @@ interface LayerPanelProps {
   previewOnly?: boolean;
   /** Layers some of whose images could not be loaded. */
   failedIds?: readonly string[];
+  /**
+   * The visibility prototype layer: its controls, which target the readings follow (null when a
+   * map layer's), picking one, and its readout.
+   */
+  visibility?: VisibilityControls & {
+    activeTarget: VisibilityTarget | null;
+    onActiveTarget: (target: VisibilityTarget) => void;
+    readout: VisibilityReadout | null;
+  };
 }
 
 /** The legend under a visible layer: a continuous bar from the team's colours, or why there is none. */
@@ -60,7 +77,8 @@ function Legend({ layer }: { layer: MapLayer }) {
 /**
  * The map's layers (docs/LANDER_RULES.md, "Map layers: elevation and slope"): for each, a switch,
  * an opacity slider and a legend; which layer the readout reads; and the readout itself, read from
- * the value tiles (never from a colour). The layers are fixed in time.
+ * the value tiles (never from a colour). Elevation and slope are fixed in time; the visibility
+ * prototype (VisibilityLayerItem) follows the app's time, one supplied frame at a time.
  */
 export function LayerPanel({
   layers,
@@ -74,9 +92,11 @@ export function LayerPanel({
   sourceId,
   previewOnly = false,
   failedIds = [],
+  visibility,
 }: LayerPanelProps) {
   const baseId = useId();
   const visible = layers.filter((layer) => settings[layer.id]?.visible);
+  const targets = visibility ? shownTargets(visibility.settings) : [];
   const active = layers.find((layer) => layer.id === activeId) ?? null;
   const status = reading ? readingStatus(reading) : null;
   return (
@@ -134,9 +154,10 @@ export function LayerPanel({
             </li>
           );
         })}
+        {visibility ? <VisibilityLayerItem {...visibility} /> : null}
       </ul>
 
-      {visible.length > 0 ? (
+      {visible.length > 0 || targets.length > 0 ? (
         <fieldset className={styles.active}>
           <legend className={styles.label}>Readings from</legend>
           {visible.map((layer) => (
@@ -148,6 +169,17 @@ export function LayerPanel({
                 onChange={() => onActive(layer.id)}
               />
               {layer.label}
+            </label>
+          ))}
+          {targets.map((target) => (
+            <label key={target} className={styles.choice}>
+              <input
+                type="radio"
+                name={`${baseId}-active`}
+                checked={target === visibility?.activeTarget}
+                onChange={() => visibility?.onActiveTarget(target)}
+              />
+              {TARGET_LABELS[target]}
             </label>
           ))}
         </fieldset>
@@ -164,6 +196,14 @@ export function LayerPanel({
             `Point at the south pole, or tap it, to read the ${active.label.toLowerCase()}.`
           )}
         </p>
+      ) : visibility?.activeTarget && visibility.readout ? (
+        <div className={styles.readout} aria-live="polite" data-testid="visibility-readout">
+          <p className={styles.readoutLine}>{visibility.readout.main}</p>
+          {visibility.readout.detail ? (
+            <p className={styles.readoutDetail}>{visibility.readout.detail}</p>
+          ) : null}
+          <p className={styles.readoutDetail}>{VISIBILITY_MEANING}</p>
+        </div>
       ) : null}
 
       {previewOnly ? (
@@ -177,8 +217,8 @@ export function LayerPanel({
       </p>
       <p className={styles.note}>
         Source: Team raster ({sourceId}; origin to be recorded). Real data at 40 m; Calculated at
-        160 m (the mean of 4 × 4 pixels). Covers 80° S to the pole; the layers don’t change with the
-        time.
+        160 m (the mean of 4 × 4 pixels). Covers 80° S to the pole; elevation and slope don’t change
+        with the time.
       </p>
     </section>
   );

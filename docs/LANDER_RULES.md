@@ -121,6 +121,26 @@ not known) gives only a lower bound, so both numbers say "at least" (for example
   that is not suitable shows "61% of needs met · 1.2 d short of 3 d") and a Compare row. Code:
   `src/data/needsMet.ts`.
 
+### Is it up: the upper limb (agreed 2026-11-13)
+
+A body is **up** (visible over the horizon) when any part of its disc is: its **upper limb** is
+above the horizon, **elevation + angular radius > horizon elevation**, with angular radius =
+asin(R ÷ distance). R_sun = 695,700 km and R_earth = 6,378.137 km (the "Target radii" in the JPL
+Horizons headers, SRC-055); the distance is the site-to-body distance at that time from our engine
+(astronomy-engine, SRC-022), also for the hours whose direction comes from Horizons (the Horizons
+files hold only azimuth and elevation). This matches Horizons' `*` and `i` flags and PGDA product
+69 ("any part of the disc visible", SRC-069).
+
+- **Where:** every horizon test, flat (0°) and terrain: whether the Sun or the Earth is up in the
+  checks, shares, hours and windows; the longest darkness and night survival; sunset, sunrise,
+  Earthset and Earthrise; the Timeline bars; the year's Sun and Earth % (2027).
+- **The mission's minimum heights stay on the disc's centre:** "Sun at least 5° up" is a power need,
+  not visibility, so a body counts for a mission when its upper limb is above the horizon **and**
+  its centre is at or above the mission's minimum.
+- Replaces the centre rule used until 2026-11-13. Decision by the user, checked against their own
+  cloud computation (2027, flat horizon): IM-1 Sun 49.5 % / Earth 100 %, IM-2 Sun 50.2 % / Earth
+  79.1 %.
+
 ### Real landing sites (agreed 2026-11-13)
 
 The Sites list, Compare, the map and the assistant use the four real landings in `data/sites.json`,
@@ -183,14 +203,14 @@ page's table (`src/data/horizonsCheck.json`):
   engine measures from the Moon's centre.
 - **(b)** Ayah's web-app exports (SRC-056): each row's `*` (daylight) and `i` (Earth up) flag must
   agree with the API data at the same time. Horizons sets these flags from the disc's **upper
-  limb**, the API data gives the **centre**; converting needs the disc's angular radius, which is
-  not agreed here (**missing equation**), so rows with the centre within **1°** of the horizon
-  (team assumption) are listed and not judged.
+  limb**, the API data gives the **centre**, so every row is judged by the upper limb (rule "Is it
+  up: the upper limb": centre + asin(R ÷ distance) > 0°). Rows with the centre within 1° of the
+  horizon are listed as close calls; they are judged too.
 - **(c)** The exports with "Azi (a-app) Elev" columns (bg1 and ch3 Sun): elevations must match the
   API data within 0.2° (bg1's rounded coordinates, about 70 m, are negligible).
 - A file whose header does not say "Center body name: Moon (301)" is skipped and reported.
-- **Result (2026-11-13):** all pass. (a) at most 0.0068° (Sun) and 0.0055° (Earth); (b) no
-  disagreement, 28 rows near the horizon, all consistent with an upper-limb reading; (c) at most
+- **Result (2026-11-13):** all pass. (a) at most 0.0068° (Sun) and 0.0055° (Earth); (b) all 434 flag rows
+  in the 7 files agree, the 28 close calls included (upper limb, re-checked 2026-11-13); (c) at most
   0.0058° (ch3, after its coordinates moved about 40 m from those in Ayah's export; re-checked 2026-11-13).
 
 ### Date range and hours (agreed 2026-11-13)
@@ -226,9 +246,12 @@ Calculated / Assumed / Unavailable) and source:
 - **Water:** "Nearest permanent shadow (where ice may be): X km", the nearest pixel with 0%
   illumination in the same product, computed offline (Python). Never says ice is there.
   **Unavailable** until the files arrive; bg1 and ch3: "Not applicable: outside south-polar data".
-- **Earth:** % of the year the Earth's centre is above the horizon, from the Horizons files
-  (SRC-055) over **calendar year 2027** (the only full year inside them; team choice), flat horizon
-  (the terrain horizon once a site has one). Calculated, for all four sites.
+- **Earth:** % of the year the Earth's upper limb is above the horizon (rule "Is it up"), from
+  the Horizons files (SRC-055) over **calendar year 2027** (the only full year inside them; team
+  choice), flat horizon (the terrain horizon once a site has one). Calculated, for all four sites.
+  2027 values (flat horizon): Sun / Earth: im1 49.47 / 100.00 %, im2 50.24 / 79.02 %, bg1 49.14 /
+  100.00 %, ch3 49.02 / 100.00 % (pinned in tests/unit/services/horizonsYear.test.ts; the user's
+  cloud check gave im1 49.5 / 100, im2 50.2 / 79.1).
 
 ### Timeline (agreed 2026-11-13, Phase E)
 
@@ -439,6 +462,29 @@ south polar stereographic grid of the 1737.4 km sphere (centre 90° S, 0° E up)
   longer used for display or readout. **Not done:** moving the camera to a straight-down south-pole
   view when a layer is switched on (plan C4): the app has no such view yet.
 
+### Visibility prototype layer (agreed 2026-11-13)
+
+The team's full-cap visibility prototype (DATA_SOURCES SRC-074) as a date-dependent map layer,
+separate from the fixed elevation and slope layers.
+
+- **What a value is:** the approximate share of the Sun's or the Earth's **apparent disc** that is
+  geometrically above the terrain skyline at one instant, 0–100 % (the file's 0–1 fraction).
+  Instantaneous geometric visibility only: **not** a share of time lit, not solar power, not
+  Earth-station (DSN) link availability, not landing or power validation.
+- **Times:** only the supplied frames, 2026-11-24 00:00 to 2026-12-08 00:00 UTC every 10 minutes.
+  The app's time is snapped to the nearest supplied frame and the **actual sampled UTC time** is
+  always shown; outside the range there is no frame and the layer says so. No interpolation, no
+  animation. Imagery and values change together; until the newly requested pair is applied, the
+  old time label stays and a loading state shows; superseded loads are dropped quietly.
+- **Readout:** from the frame's numerical grid (nearest 9.6 km cell), never from colours: "Approx.
+  visible disc: N %", the sampled UTC time and "9.6 km grid". 0 % is a valid value; outside the
+  grid's coverage, "No data".
+- **Display:** Sun and Earth as separate layers with their own switch and opacity; Sun on and
+  Earth off at first (so one opaque layer does not hide the other); a fixed 0–1 legend (the
+  manifest's colours). Always labelled: **"Prototype geometric visibility · 9.6 km grid · 2 m
+  assumed height · eclipses not modeled"**.
+- The layer does not feed any check, ranking or verdict.
+
 ### Power check (Miral's Moon power lab; agreed 2026-11-13)
 
 A teaching model in Site details, credited to **Miral** (the team's power lab,
@@ -605,3 +651,5 @@ the user's text into the settings the app already has. Code: `api/slip.ts` (serv
 | 2026-11-13 | **Timeline** in Compare (rule "Timeline"): 12 months of 6-hour Sun/Earth states per site from the existing checks, a draggable bracket that moves the picked dates, map markers green/red by the existing suitable verdict                                                                                                                                                                                                            | Final plan Phase E (below the cut line; started after Phases A, B and D were green); no new measure                                                                          | User                                            |
 | 2026-11-13 | **Map layers (Phase C)** from the team's elevation and slope rasters (rule "Map layers"): values at 160 m across 80–90° S and 40 m around IM-1 and IM-2, colours copied from the team's colour TIFFs, on-demand static value tiles with the documented encoding                                                                                                                                                                       | User's decisions on delivery and encoding; no backend or new package                                                                                                         | User                                            |
 | 2026-11-13 | **"Launch slipped?" assistant removed from the website, kept as a future plan:** the feature flag `VITE_SLIP_ASSISTANT` is now off by default (set it to "on" to show it). The code, its rules above and `api/slip.ts` stay; About lists it as planned                                                                                                                                                                                | User's decision: the site works without it; it can return later                                                                                                              | User                                            |
+| 2026-11-13 | **"Up" = upper limb above the horizon** (rule "Is it up: the upper limb"): elevation + asin(R ÷ distance) > horizon, Sun and Earth, flat and terrain; mission minimums stay on the centre                                                                                                                                                                                                                                             | Matches Horizons' flags and PGDA 69; resolves the missing equation behind the 28 unjudged flag rows (KNOWN_ISSUES KI-024)                                                    | User                                            |
+| 2026-11-13 | **Visibility prototype layer** (rule above): the team's full-cap Sun/Earth disc-visibility frames, 24 Nov–8 Dec 2026 every 10 minutes, wired to the app's time with the sampled time shown; information only                                                                                                                                                                                                                          | User's integration request; labelled as a prototype, not validation                                                                                                          | User                                            |

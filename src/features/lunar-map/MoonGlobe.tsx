@@ -76,6 +76,17 @@ import { PREVIEW_FAILURE_THRESHOLD, PREVIEW_IMAGERY, type ImageryStatus } from '
 import { MapControls } from './MapControls';
 import { SHADE_EVERYWHERE, type LayerDisplay, type LayerImageSpec } from './mapLayerState';
 import {
+  applyVisibilityDisplay,
+  createVisibilityController,
+  type VisibilityHandle,
+} from './visibilityController';
+import {
+  VISIBILITY_MANIFEST_URL,
+  createFrameRequester,
+  type VisibilityDisplay,
+  type VisibilityRuntime,
+} from './visibilityLayer';
+import {
   AMBIENT,
   COLOUR_FADE_MS,
   EARTH_IMAGE,
@@ -125,6 +136,12 @@ Ion.defaultAccessToken = '';
 const SITE_ENTITY_PREFIX = 'site:';
 const NO_LAYERS: readonly LayerDisplay[] = [];
 const NO_IDS: readonly string[] = [];
+const NO_VISIBILITY: VisibilityDisplay = {
+  load: false,
+  frame: null,
+  sun: { visible: false, opacity: 0 },
+  earth: { visible: false, opacity: 0 },
+};
 const MARKER_HEIGHT_M = 200;
 /** Grid lines: lifted above the surface and cut finely enough that a segment sags < 1 m. */
 const GRID_HEIGHT_M = 20;
@@ -218,6 +235,13 @@ interface MoonGlobeProps {
   layerShadeCutZ?: number;
   /** Some of a layer's images could not be loaded (the panel says so). */
   onLayerImagesFailed?: (layerId: string) => void;
+  /**
+   * The visibility prototype layer (Sun and Earth, one frame per 10 minutes): loads nothing until
+   * `load`; the frame is the app's time snapped to a supplied one, or null (nothing requested).
+   */
+  visibility?: VisibilityDisplay;
+  /** What the visibility layer did: manifest loaded or not, frame applied, loading, failure. */
+  onVisibilityState?: (patch: Partial<VisibilityRuntime>) => void;
   imageryStatus: ImageryStatus;
   onImageryStatusChange: (status: ImageryStatus) => void;
   /** How much of each map edge the chrome covers (sidebars, status strip, time bar), in px. */
@@ -303,6 +327,8 @@ export function MoonGlobe({
   onHoverGround,
   layerShadeCutZ = SHADE_EVERYWHERE,
   onLayerImagesFailed,
+  visibility = NO_VISIBILITY,
+  onVisibilityState,
   imageryStatus,
   onImageryStatusChange,
   viewInsets,
@@ -380,6 +406,12 @@ export function MoonGlobe({
     new Map<string, { preview: ImageryLayer[]; full: ImageryLayer[]; failed: boolean }>(),
   );
   const mapLayersRef = useRef(mapLayers);
+  /** The visibility layer: its latest description, its controller once made, and its teardown. */
+  const visibilityRef = useRef(visibility);
+  const onVisibilityStateRef = useRef(onVisibilityState);
+  const visibilityHandleRef = useRef<VisibilityHandle | null>(null);
+  const visibilityStartedRef = useRef(false);
+  const disposeVisibilityRef = useRef<() => void>(() => undefined);
   /** Each beacon's animated scale and fade-in. */
   const beaconAnimRef = useRef(new Map<string, BeaconAnim>());
   /** The beacon under the pointer, and the one highlighted from the list. */
@@ -404,6 +436,7 @@ export function MoonGlobe({
     onHoverRef.current = onHoverSite;
     onHoverGroundRef.current = onHoverGround;
     onLayerFailedRef.current = onLayerImagesFailed;
+    onVisibilityStateRef.current = onVisibilityState;
     sitesRef.current = rankedSites;
   });
 
@@ -1222,6 +1255,10 @@ export function MoonGlobe({
       removeProgressListener();
       removeTrekFade();
       removeNadirLock();
+      // The visibility controller removes its own imagery layers, so it goes before the widget.
+      disposeVisibilityRef.current();
+      disposeVisibilityRef.current = () => undefined;
+      visibilityStartedRef.current = false;
       widget.destroy();
       widgetRef.current = null;
     };
@@ -1502,6 +1539,53 @@ export function MoonGlobe({
     }
     apply();
   }, [mapLayers]);
+
+  // The visibility prototype (docs/LANDER_RULES.md, "Visibility prototype layer"): one controller,
+  // made the first time the layer is switched on; then the switches, opacities and the frame for
+  // the app's time go to it. A manifest that cannot be read leaves the layer unavailable and the
+  // globe as it was. Its imagery and numbers change together, when the controller has both.
+  useEffect(() => {
+    visibilityRef.current = visibility;
+    const widget = widgetRef.current;
+    if (!widget || widget.isDestroyed()) return;
+    const handle = visibilityHandleRef.current;
+    if (handle) {
+      applyVisibilityDisplay(handle, visibility);
+      return;
+    }
+    if (!visibility.load || visibilityStartedRef.current) return;
+    visibilityStartedRef.current = true;
+    const report = (patch: Partial<VisibilityRuntime>) => onVisibilityStateRef.current?.(patch);
+    report({ status: 'loading' });
+    createVisibilityController(widget, VISIBILITY_MANIFEST_URL, (timeUTC) =>
+      report({ appliedTime: timeUTC }),
+    ).then(
+      (controller) => {
+        // The globe went while the manifest loaded: the controller has no layers yet to remove.
+        if (widget.isDestroyed()) return;
+        const requester = createFrameRequester(
+          (stamp) => controller.setTime(stamp),
+          ({ loading, failed }) => report({ loading, failed }),
+        );
+        const next: VisibilityHandle = { controller, requester };
+        visibilityHandleRef.current = next;
+        disposeVisibilityRef.current = () => {
+          requester.stop();
+          controller.dispose();
+          visibilityHandleRef.current = null;
+        };
+        report({
+          status: 'ready',
+          colors: controller.manifest.colors ?? null,
+          sample: (target, lon, lat) => controller.sample(target, lon, lat),
+        });
+        applyVisibilityDisplay(next, visibilityRef.current);
+      },
+      () => {
+        if (!widget.isDestroyed()) report({ status: 'unavailable' });
+      },
+    );
+  }, [visibility]);
 
   // Where the Sun-and-relief shading stops: south of the layers' coverage while one is visible.
   useEffect(() => {

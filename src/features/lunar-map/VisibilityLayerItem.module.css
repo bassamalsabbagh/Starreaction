@@ -1,0 +1,61 @@
+/* The visibility prototype's entry in the map layers panel: the same look as the other layers. */
+.layer {
+  composes: layer from './LayerPanel.module.css';
+}
+
+.toggle {
+  composes: toggle from './LayerPanel.module.css';
+}
+
+.opacity {
+  composes: opacity from './LayerPanel.module.css';
+}
+
+.legend {
+  composes: legend from './LayerPanel.module.css';
+}
+
+.bar {
+  composes: bar from './LayerPanel.module.css';
+}
+
+.ticks {
+  composes: ticks from './LayerPanel.module.css';
+}
+
+.tick {
+  composes: tick from './LayerPanel.module.css';
+}
+
+.unit {
+  composes: unit from './LayerPanel.module.css';
+}
+
+.note {
+  composes: note from './LayerPanel.module.css';
+}
+
+.error {
+  composes: error from './LayerPanel.module.css';
+}
+
+/* Each of Sun and Earth: its switch and opacity, set in under the main switch. */
+.target {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+}
+
+/* The fixed label: always with the legend, so it reads as part of it. */
+.label {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.frame {
+  margin: 0;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
