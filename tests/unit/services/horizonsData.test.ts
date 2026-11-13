@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   decodeHorizons,
   encodeHorizons,
+  engineDistanceKm,
   horizonsAzEl,
+  horizonsSky,
   loadHorizonsSeries,
   pointAt,
   positionsSource,
@@ -13,8 +15,8 @@ import {
   type HorizonsIndex,
   type HorizonsSeries,
 } from '../../../src/services/horizonsData';
-import { azimuthElevationOf } from '../../../src/utils/lunarSky';
-import { hourlySky } from '../../../src/utils/skyVisibility';
+import { azimuthElevationOf, distanceFromSite } from '../../../src/utils/lunarSky';
+import { hourlySky, skyAtHour } from '../../../src/utils/skyVisibility';
 
 const HOUR = 3_600_000;
 const STEP = 10 * 60_000;
@@ -95,11 +97,32 @@ describe('pointAt', () => {
         [283.25, -3.76],
         [180, 45],
       ] as const) {
-        const back = azimuthElevationOf(pointAt(site, azimuth, elevation), site);
+        const back = azimuthElevationOf(pointAt(site, azimuth, elevation, 384_400), site);
         expect(back.elevation).toBeCloseTo(elevation, 6);
         expect(((back.azimuth - azimuth + 540) % 360) - 180).toBeCloseTo(0, 6);
       }
     }
+  });
+
+  it('puts the point at the given distance from the site', () => {
+    const site = { lat: -84.79, lon: 29.2 };
+    expect(distanceFromSite(pointAt(site, 95.7, 11.8, 384_400), site)).toBeCloseTo(384_400, 3);
+  });
+});
+
+describe('horizonsSky', () => {
+  it('takes the direction from Horizons and the distance from our engine for the hour', () => {
+    const site = { lat: -84.79, lon: 29.2 };
+    const s = series({ sunAz: [90, 90], sunEl: [3, 3], earthAz: [10, 10], earthEl: [-0.5, -0.5] });
+    const sky = horizonsSky(s, site, START);
+    if (!sky) throw new Error('covered');
+    expect(azimuthElevationOf(sky.earth, site).elevation).toBeCloseTo(-0.5, 6);
+    const engine = skyAtHour(START / HOUR);
+    expect(distanceFromSite(sky.sun, site)).toBeCloseTo(distanceFromSite(engine.sun, site), 0);
+    expect(distanceFromSite(sky.earth, site)).toBeCloseTo(distanceFromSite(engine.earth, site), 3);
+    expect(engineDistanceKm(site, 'earth', START + 30 * 60_000)).toBe(
+      distanceFromSite(engine.earth, site),
+    );
   });
 });
 
@@ -152,29 +175,35 @@ describe('siteHourlySky', () => {
   });
 });
 
-describe('shareAbove', () => {
-  // Made-up: Earth at −1°, 0°, 2°, 5° elevation, azimuths 0°, 90°, 180°, 270°.
+describe('shareAbove (the upper limb, docs/LANDER_RULES.md "Is it up: the upper limb")', () => {
+  // Made-up: Earth at −1.5°, −0.5°, 2°, 5° elevation, azimuths 0°, 90°, 180°, 270°; the Sun at
+  // −0.4°, −0.2°, −0.1°, 0°. The Earth's angular radius is about 0.9–1.0°, the Sun's about 0.27°.
   const s = series({
     sunAz: [0, 0, 0, 0],
-    sunEl: [0, 0, 0, 0],
+    sunEl: [-0.4, -0.2, -0.1, 0],
     earthAz: [0, 90, 180, 270],
-    earthEl: [-1, 0, 2, 5],
+    earthEl: [-1.5, -0.5, 2, 5],
   });
+  const site = { lat: -84.79, lon: 29.2 };
   const all = { start: START, end: START + 4 * STEP };
 
-  it('counts samples at or above a flat horizon', () => {
-    expect(shareAbove(s, 'earth', all)).toEqual({ pct: 75, samples: 4 });
+  it('counts samples whose upper limb is above a flat horizon, centre below 0° included', () => {
+    // −0.5° counts (its limb is up); −1.5° does not.
+    expect(shareAbove(s, 'earth', site, all)).toEqual({ pct: 75, samples: 4 });
+    // −0.2° and −0.1° count; −0.4° is more than the Sun's radius below.
+    expect(shareAbove(s, 'sun', site, all)).toEqual({ pct: 75, samples: 4 });
   });
 
   it('uses the terrain horizon in each direction when given', () => {
-    // Terrain 3° high to the south and west: only the 5° sample (west, 270°) stays up.
+    // Terrain 3° high to the south and west: the 2° sample (south) stays behind it even with its
+    // radius; the 5° sample (west) and the −0.5° one (east, flat) stay up.
     const terrain = (azimuth: number) => (azimuth >= 180 ? 3 : 0);
-    expect(shareAbove(s, 'earth', all, terrain)).toEqual({ pct: 50, samples: 4 });
+    expect(shareAbove(s, 'earth', site, all, terrain)).toEqual({ pct: 50, samples: 4 });
   });
 
   it('is null when the series does not cover the range', () => {
-    expect(shareAbove(s, 'earth', { start: START, end: START + 5 * STEP })).toBeNull();
-    expect(shareAbove(s, 'earth', { start: START - STEP, end: START + STEP })).toBeNull();
+    expect(shareAbove(s, 'earth', site, { start: START, end: START + 5 * STEP })).toBeNull();
+    expect(shareAbove(s, 'earth', site, { start: START - STEP, end: START + STEP })).toBeNull();
   });
 
   it('defaults to calendar 2027', () => {

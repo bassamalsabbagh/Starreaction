@@ -140,7 +140,8 @@ export function PlaceReport({
       <dt>{label}</dt>
       <dd>
         <span className={styles.nowValue}>
-          {body.up ? `${Math.round(body.elevationDeg)}°` : 'Down'}
+          {/* Up by its upper limb, the centre can sit just below 0°: that reads "0°". */}
+          {body.up ? `${Math.max(0, Math.round(body.elevationDeg))}°` : 'Down'}
         </span>
         <span className={styles.nowNote}>
           {body.up ? note : 'below the horizon'} · {nextText(which, body, time)}

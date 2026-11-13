@@ -5,11 +5,21 @@
  * src/data/horizons/index.json describes them, public/data/horizons/<site>.bin holds them. Both are
  * optional: without them, or outside their dates, the app uses its own engine (src/utils/lunarSky.ts).
  *
- * Horizons gives directions as seen from the site, so each one is turned into a point far along
- * that direction from the site. The app's existing tests on body-fixed vectors (elevation, "is it
- * up", terrain, the horizon view) then give back exactly Horizons' azimuth and elevation.
+ * Horizons gives directions as seen from the site, so each one is turned into a point along that
+ * direction from the site, at our engine's distance for that hour (for the disc's angular radius).
+ * The app's existing tests on body-fixed vectors (elevation, "is it up", terrain, the horizon view)
+ * then give back exactly Horizons' azimuth and elevation.
  */
-import { surfacePoint, type LatLon, type LunarSky, type Vec3 } from '../utils/lunarSky';
+import {
+  EARTH_RADIUS_KM,
+  SUN_RADIUS_KM,
+  angularRadiusDeg,
+  distanceFromSite,
+  surfacePoint,
+  type LatLon,
+  type LunarSky,
+  type Vec3,
+} from '../utils/lunarSky';
 import { skyAtHour, type SkySample } from '../utils/skyVisibility';
 import { HOUR_MS, type TimeRange } from '../utils/time';
 
@@ -167,14 +177,17 @@ export function horizonsAzEl(
   return { azimuth: (((az0 + turn * f) % 360) + 360) % 360, elevation: el0 + (el1 - el0) * f };
 }
 
-/** Far enough that only the direction matters; any distance gives the same azimuth and elevation. */
-const FAR_KM = 1e9;
-
 /**
  * A body-fixed point (km) that appears at this azimuth (clockwise from north) and elevation from
- * the site, on the app's smooth sphere: the inverse of `azimuthElevationOf`.
+ * the site, `distanceKm` away from it, on the app's smooth sphere: the inverse of
+ * `azimuthElevationOf`. The distance sets the disc's angular radius for the upper-limb rule.
  */
-export function pointAt(site: LatLon, azimuthDeg: number, elevationDeg: number): Vec3 {
+export function pointAt(
+  site: LatLon,
+  azimuthDeg: number,
+  elevationDeg: number,
+  distanceKm: number,
+): Vec3 {
   const DEG = Math.PI / 180;
   const at = surfacePoint(site);
   const r = Math.hypot(at[0], at[1], at[2]);
@@ -195,20 +208,31 @@ export function pointAt(site: LatLon, azimuthDeg: number, elevationDeg: number):
       Math.sin(e) * (up[k] ?? 0),
   );
   return [
-    at[0] + FAR_KM * (direction[0] ?? 0),
-    at[1] + FAR_KM * (direction[1] ?? 0),
-    at[2] + FAR_KM * (direction[2] ?? 0),
+    at[0] + distanceKm * (direction[0] ?? 0),
+    at[1] + distanceKm * (direction[1] ?? 0),
+    at[2] + distanceKm * (direction[2] ?? 0),
   ];
 }
 
-/** The Sun and Earth at `t` for this site from Horizons, as the app's sky vectors; null outside. */
+/**
+ * The site-to-body distance at `t`, km, from our engine's sample for that hour: the Horizons files
+ * hold only directions, and a disc's angular radius barely changes within an hour.
+ */
+export function engineDistanceKm(site: LatLon, body: SkyBody, t: number): number {
+  return distanceFromSite(skyAtHour(Math.floor(t / HOUR_MS))[body], site);
+}
+
+/**
+ * The Sun and Earth at `t` for this site, as the app's sky vectors: the direction from Horizons,
+ * the distance from our engine (`engineDistanceKm`). Null outside the series.
+ */
 export function horizonsSky(series: HorizonsSeries, site: LatLon, t: number): LunarSky | null {
   const sun = horizonsAzEl(series, 'sun', t);
   const earth = horizonsAzEl(series, 'earth', t);
   if (!sun || !earth) return null;
   return {
-    sun: pointAt(site, sun.azimuth, sun.elevation),
-    earth: pointAt(site, earth.azimuth, earth.elevation),
+    sun: pointAt(site, sun.azimuth, sun.elevation, engineDistanceKm(site, 'sun', t)),
+    earth: pointAt(site, earth.azimuth, earth.elevation, engineDistanceKm(site, 'earth', t)),
   };
 }
 
@@ -253,13 +277,16 @@ export function positionsSource(
 export const YEAR_RANGE: TimeRange = { start: Date.UTC(2027, 0, 1), end: Date.UTC(2028, 0, 1) };
 
 /**
- * The share of the series' samples in [range.start, range.end) with the body's centre at or above
- * the horizon: 0° (flat), or the terrain horizon in its direction when `horizonDeg` is given.
- * Null when the series does not cover the whole range.
+ * The share of the series' samples in [range.start, range.end) with the body's upper limb above
+ * the horizon (docs/LANDER_RULES.md, "Is it up: the upper limb"): elevation + angular radius >
+ * 0° (flat), or > the terrain horizon in its direction when `horizonDeg` is given. The angular
+ * radius uses our engine's site-to-body distance for the sample's hour. Null when the series does
+ * not cover the whole range.
  */
 export function shareAbove(
   series: HorizonsSeries,
   body: SkyBody,
+  site: LatLon,
   range: TimeRange = YEAR_RANGE,
   horizonDeg: (azimuth: number) => number = () => 0,
 ): { pct: number; samples: number } | null {
@@ -267,12 +294,21 @@ export function shareAbove(
   if (range.start < span.start || range.end - series.stepMs > span.end) return null;
   const az = body === 'sun' ? series.sunAz : series.earthAz;
   const el = body === 'sun' ? series.sunEl : series.earthEl;
+  const radiusKm = body === 'sun' ? SUN_RADIUS_KM : EARTH_RADIUS_KM;
   const first = Math.ceil((range.start - series.startMs) / series.stepMs);
   let samples = 0;
   let up = 0;
+  let hour = Number.NaN;
+  let limbDeg = 0;
   for (let i = first; series.startMs + i * series.stepMs < range.end; i++) {
+    const t = series.startMs + i * series.stepMs;
+    // One engine distance per hour (cached by skyAtHour), shared by that hour's samples.
+    if (Math.floor(t / HOUR_MS) !== hour) {
+      hour = Math.floor(t / HOUR_MS);
+      limbDeg = angularRadiusDeg(radiusKm, engineDistanceKm(site, body, t));
+    }
     samples += 1;
-    if ((el[i] ?? 0) * SCALE >= horizonDeg((az[i] ?? 0) * SCALE)) up += 1;
+    if ((el[i] ?? 0) * SCALE + limbDeg > horizonDeg((az[i] ?? 0) * SCALE)) up += 1;
   }
   return { pct: samples ? (up / samples) * 100 : 0, samples };
 }

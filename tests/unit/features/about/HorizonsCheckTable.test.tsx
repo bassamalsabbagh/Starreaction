@@ -32,16 +32,16 @@ describe('HorizonsCheckTable', () => {
     expect(within(engine).getAllByRole('row')[1]).toHaveTextContent(
       `IM-1 OdysseusSun${first.maxDiffDeg.toFixed(4)}°${first.meanDiffDeg.toFixed(4)}°Pass`,
     );
-    // (b) the flags, with the near-horizon rows listed and not judged, and why.
+    // (b) the flags, every row judged by the upper limb, close calls counted.
     expect(
       within(flags)
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent),
-    ).toEqual(['File', 'Compared', 'Agree', 'Disagree', 'Near the horizon (not judged)', 'Result']);
+    ).toEqual(['File', 'Compared', 'Agree', 'Disagree', 'Close calls (judged)', 'Result']);
     expect(within(flags).getAllByRole('row')).toHaveLength(check.flags.length + 1);
     expect(section).toHaveTextContent('upper limb');
-    expect(section).toHaveTextContent('within 1° of the horizon are listed and not judged');
-    expect(section).toHaveTextContent('The 1° margin is a team assumption');
+    expect(section).toHaveTextContent('every row is judged by the upper limb');
+    expect(section).toHaveTextContent('close calls, and judged too');
     // (c) the elevation columns.
     expect(within(elevations).getAllByRole('row')).toHaveLength(check.elevations.length + 1);
     expect(within(elevations).getAllByRole('cell', { name: 'Pass' })).toHaveLength(

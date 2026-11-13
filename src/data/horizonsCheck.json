@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedUtc": "2026-11-13T14:30:25Z",
+  "generatedUtc": "2026-11-13T20:48:55Z",
   "limitDeg": 0.2,
   "nearHorizonDeg": 1,
   "engineDays": "2026-11-13 00:00 UTC + 3 days, every 10 minutes",
@@ -60,7 +60,7 @@
       "site": "ch3",
       "target": "Earth (399)",
       "rows": 62,
-      "agree": 61,
+      "agree": 62,
       "disagree": 0,
       "nearHorizon": 1,
       "pass": true
@@ -70,7 +70,7 @@
       "site": "im1",
       "target": "Earth (399)",
       "rows": 62,
-      "agree": 60,
+      "agree": 62,
       "disagree": 0,
       "nearHorizon": 2,
       "pass": true
@@ -80,7 +80,7 @@
       "site": "im2",
       "target": "Earth (399)",
       "rows": 62,
-      "agree": 50,
+      "agree": 62,
       "disagree": 0,
       "nearHorizon": 12,
       "pass": true
@@ -100,7 +100,7 @@
       "site": "ch3",
       "target": "Sun (10)",
       "rows": 62,
-      "agree": 61,
+      "agree": 62,
       "disagree": 0,
       "nearHorizon": 1,
       "pass": true
@@ -110,7 +110,7 @@
       "site": "im2",
       "target": "Sun (10)",
       "rows": 62,
-      "agree": 50,
+      "agree": 62,
       "disagree": 0,
       "nearHorizon": 12,
       "pass": true

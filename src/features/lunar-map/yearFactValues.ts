@@ -37,6 +37,7 @@ export function yearFacts(
     ? shareAbove(
         series,
         'earth',
+        site,
         YEAR_RANGE,
         terrain ? (azimuth) => horizonAt(terrain, azimuth) : undefined,
       )

@@ -83,7 +83,7 @@ export function HorizonsCheckTable({ check = HORIZONS_CHECK }: { check?: Horizon
               <th scope="col">Compared</th>
               <th scope="col">Agree</th>
               <th scope="col">Disagree</th>
-              <th scope="col">Near the horizon (not judged)</th>
+              <th scope="col">Close calls (judged)</th>
               <th scope="col">Result</th>
             </tr>
           </thead>
@@ -110,10 +110,9 @@ export function HorizonsCheckTable({ check = HORIZONS_CHECK }: { check?: Horizon
       </div>
       <p className={styles.note}>
         Horizons sets these flags from the top edge (upper limb) of the Sun&apos;s or the
-        Earth&apos;s disc, while our data is the centre, so rows with the centre within{' '}
-        {check.nearHorizonDeg}° of the horizon are listed and not judged. The {check.nearHorizonDeg}
-        ° margin is a team assumption: turning the centre into the upper limb needs the disc&apos;s
-        angular size, which is not agreed yet.
+        Earth&apos;s disc, so every row is judged by the upper limb: the centre&apos;s elevation
+        plus the disc&apos;s angular radius. Rows with the centre within {check.nearHorizonDeg}° of
+        the horizon are counted as close calls, and judged too.
       </p>
 
       <div className={styles.scroll}>

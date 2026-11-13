@@ -158,7 +158,7 @@ export function HorizonView({
   };
 
   const describe = (body: BodyNow, name: string) =>
-    `${name} now ${body.up ? `${Math.round(body.elevationDeg)}° up` : 'below the horizon'}, toward ${Math.round(body.azimuthDeg)}°`;
+    `${name} now ${body.up ? `${Math.max(0, Math.round(body.elevationDeg))}° up` : 'below the horizon'}, toward ${Math.round(body.azimuthDeg)}°`;
   const sunHigh = Math.max(...paths.sun.map((point) => point.elevation));
 
   return (

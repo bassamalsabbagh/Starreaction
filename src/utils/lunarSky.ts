@@ -16,6 +16,14 @@ import { Body, GeoMoon, GeoVector, KM_PER_AU, RotationAxis, type Vector } from '
 /** Mean lunar radius, km (DATA_SOURCES SRC-012; the same as Cesium's Ellipsoid.MOON). */
 export const MOON_RADIUS_KM = 1737.4;
 
+/**
+ * The Sun's and the Earth's radii, km: the "Target radii" in the JPL Horizons headers
+ * (docs/DATA_SOURCES.md SRC-055). They give each disc's angular radius for the upper-limb rule
+ * (docs/LANDER_RULES.md, "Is it up: the upper limb").
+ */
+export const SUN_RADIUS_KM = 695700;
+export const EARTH_RADIUS_KM = 6378.137;
+
 export type Vec3 = readonly [number, number, number];
 
 /** The Sun and Earth centres from the Moon's centre, in the body-fixed frame, km. */
@@ -177,6 +185,40 @@ export function aboveHorizonTest(site: LatLon): (target: Vec3, minElevationDeg: 
   };
 }
 
+/** A disc's angular radius seen from `distanceKm` away, degrees: asin(R ÷ distance). */
+export function angularRadiusDeg(radiusKm: number, distanceKm: number): number {
+  return Math.asin(Math.min(1, radiusKm / distanceKm)) / DEG;
+}
+
+/** The distance from a site (on the mean sphere) to a body-fixed point, km. */
+export function distanceFromSite(target: Vec3, site: LatLon): number {
+  const at = surfacePoint(site);
+  return Math.hypot(target[0] - at[0], target[1] - at[1], target[2] - at[2]);
+}
+
+/**
+ * The "is it up" test for one site (docs/LANDER_RULES.md, "Is it up: the upper limb"): a body of
+ * radius `radiusKm` whose centre is at `target` (body-fixed km) is up when its upper limb is above
+ * the horizon, elevation + asin(R ÷ distance) > `horizonDeg` (0°: the smooth sphere's horizon).
+ * The distance is from the site. Compared as sines, like `aboveHorizonTest`.
+ */
+export function upperLimbTest(
+  site: LatLon,
+): (target: Vec3, radiusKm: number, horizonDeg?: number) => boolean {
+  const at = surfacePoint(site);
+  const up = unit(at);
+  return (target, radiusKm, horizonDeg = 0) => {
+    const dx = target[0] - at[0];
+    const dy = target[1] - at[1];
+    const dz = target[2] - at[2];
+    const distance = Math.hypot(dx, dy, dz);
+    const sine = (up[0] * dx + up[1] * dy + up[2] * dz) / distance;
+    // The centre must be above the horizon minus the angular radius.
+    const lowest = horizonDeg * DEG - Math.asin(Math.min(1, radiusKm / distance));
+    return lowest < -Math.PI / 2 || sine > Math.sin(lowest);
+  };
+}
+
 /** The Sun's elevation at a site, degrees (negative: below the horizon). */
 export function sunElevation(lat: number, lon: number, date: Date): number {
   return elevationOf(lunarSky(date).sun, { lat, lon });
@@ -187,8 +229,16 @@ export function earthElevation(lat: number, lon: number, date: Date): number {
   return elevationOf(lunarSky(date).earth, { lat, lon });
 }
 
-/** "Sun 12° up" or "Sun below horizon" (whole degrees; 0° up means on the horizon). */
-export function describeElevation(body: string, elevationDeg: number): string {
-  if (elevationDeg < 0) return `${body} below horizon`;
-  return `${body} ${Math.round(elevationDeg)}° up`;
+/**
+ * "Sun 12° up" or "Sun below horizon" (whole degrees; 0° up means on the horizon). `up` is the
+ * upper-limb answer when known: a body whose limb is up but whose centre is just below 0° reads
+ * "0° up".
+ */
+export function describeElevation(
+  body: string,
+  elevationDeg: number,
+  up = elevationDeg >= 0,
+): string {
+  if (!up) return `${body} below horizon`;
+  return `${body} ${Math.max(0, Math.round(elevationDeg))}° up`;
 }

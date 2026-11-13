@@ -7,6 +7,7 @@ import {
   type YearSite,
 } from '../../../../src/features/compare/yearWindows';
 import type { HorizonsSeries } from '../../../../src/services/horizonsData';
+import { EARTH_RADIUS_KM, SUN_RADIUS_KM } from '../../../../src/utils/lunarSky';
 import { skyAtHour, upTest } from '../../../../src/utils/skyVisibility';
 import type { HorizonProfile } from '../../../../src/utils/terrainShadow';
 import { HOUR_MS } from '../../../../src/utils/time';
@@ -79,8 +80,8 @@ describe('yearWindows (docs/LANDER_RULES.md, "Timeline")', () => {
     const up = upTest(PLACE);
     for (const hours of [0, 6, 300, 600]) {
       const sky = skyAtHour(Math.floor(h(hours) / HOUR_MS));
-      const sun = up(sky.sun, 5);
-      const earth = up(sky.earth, 5);
+      const sun = up(sky.sun, 5, SUN_RADIUS_KM);
+      const earth = up(sky.earth, 5, EARTH_RADIUS_KM);
       const expected: SkyState = sun && earth ? 'both' : sun ? 'sun' : earth ? 'earth' : 'none';
       expect(stateAt(engine, h(hours))).toBe(expected);
     }

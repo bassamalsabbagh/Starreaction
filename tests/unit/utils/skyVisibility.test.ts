@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { azimuthElevationOf, earthElevation, sunElevation } from '../../../src/utils/lunarSky';
+import {
+  EARTH_RADIUS_KM,
+  MOON_RADIUS_KM,
+  SUN_RADIUS_KM,
+  angularRadiusDeg,
+  azimuthElevationOf,
+  distanceFromSite,
+  earthElevation,
+  elevationOf,
+  sunElevation,
+} from '../../../src/utils/lunarSky';
 import {
   bestWindow,
   hourlySky,
@@ -8,6 +18,7 @@ import {
   mergeRuns,
   sampledSpan,
   siteSky,
+  upTest,
   type SkySample,
 } from '../../../src/utils/skyVisibility';
 import { horizonAt, type HorizonProfile } from '../../../src/utils/terrainShadow';
@@ -220,14 +231,44 @@ describe('longestDarkHours (the Power check night)', () => {
     // At the equator a lunar night lasts about half of 29.5 days.
     expect(hours).toBeGreaterThan(300);
     expect(hours).toBeLessThan(372);
-    // The same count by hand.
-    let longest = 0;
-    let run = 0;
-    for (const sample of samples.filter((s) => s.t >= NOV_15.start && s.t < NOV_15.end)) {
-      run = sunElevation(0, 0, new Date(sample.t)) < 0 ? run + 1 : 0;
-      longest = Math.max(longest, run);
-    }
-    expect(hours).toBe(longest);
+    // The same count by hand: dark while the Sun's upper limb is at or below 0°.
+    const site = { lat: 0, lon: 0 };
+    const longestBy = (dark: (sample: SkySample) => boolean) => {
+      let longest = 0;
+      let run = 0;
+      for (const sample of samples.filter((s) => s.t >= NOV_15.start && s.t < NOV_15.end)) {
+        run = dark(sample) ? run + 1 : 0;
+        longest = Math.max(longest, run);
+      }
+      return longest;
+    };
+    const limb = (sample: SkySample) =>
+      elevationOf(sample.sun, site) +
+      angularRadiusDeg(SUN_RADIUS_KM, distanceFromSite(sample.sun, site));
+    expect(hours).toBe(longestBy((sample) => limb(sample) <= 0));
+    // The upper limb shortens the night against the old centre rule, by about an hour here.
+    const byCentre = longestBy((sample) => sunElevation(0, 0, new Date(sample.t)) < 0);
+    expect(hours).toBeLessThanOrEqual(byCentre);
+    expect(byCentre - hours).toBeLessThanOrEqual(2);
+  });
+
+  it('counts an hour with the Sun’s centre just below 0° but its limb up as lit', () => {
+    // At 0° N 0° E (up +x, north +z): the Sun 1 AU away, its centre 0.1° below the horizon.
+    const e = (-0.1 * Math.PI) / 180;
+    const AU = 149_597_870.7;
+    const grazing = [MOON_RADIUS_KM + AU * Math.sin(e), 0, AU * Math.cos(e)] as const;
+    const deep = [-AU, 0, 0] as const;
+    const samples: SkySample[] = [deep, deep, grazing, deep, deep, deep].map((sun, i) => ({
+      t: i * HOUR_MS,
+      sun,
+      earth: deep,
+    }));
+    const range = { start: 0, end: 6 * HOUR_MS };
+    // By the centre this was one six-hour night; by the limb, the grazing hour splits it.
+    expect(longestDarkHours(samples, { lat: 0, lon: 0 }, range)).toEqual({
+      hours: 3,
+      atLeast: true,
+    });
   });
 
   it('says "at least" when the night reaches the edge of the range', () => {
@@ -301,9 +342,11 @@ describe('siteSky with a terrain horizon', () => {
     const ground = horizon((azimuth) => (azimuth < 180 ? 3 : -90));
     const result = siteSky(samples, SOUTH_POLE_SITE, low, NOV_15, ground);
     const inRange = samples.filter((s) => s.t >= NOV_15.start && s.t < NOV_15.end);
+    // The minimum on the centre; the terrain against the upper limb.
     const sunUp = inRange.filter((s) => {
       const { azimuth, elevation } = azimuthElevationOf(s.sun, SOUTH_POLE_SITE);
-      return elevation >= low.minSunElevationDeg && elevation >= horizonAt(ground, azimuth);
+      const radius = angularRadiusDeg(SUN_RADIUS_KM, distanceFromSite(s.sun, SOUTH_POLE_SITE));
+      return elevation >= low.minSunElevationDeg && elevation + radius > horizonAt(ground, azimuth);
     }).length;
     expect(result.sunPct).toBeCloseTo((sunUp / inRange.length) * 100, 6);
     expect(result.sunPct).toBeLessThanOrEqual(smooth.sunPct);
@@ -322,13 +365,59 @@ describe('siteSky: hours of Sun, Earth and both (docs/LANDER_RULES.md, "Date ran
 
   it('counts the hours of a picked range only, not the margin around it', () => {
     const range = { start: Date.UTC(2026, 11, 12), end: Date.UTC(2026, 11, 26) };
+    // A −90° minimum and a −90° terrain horizon all round: everything counts as up, every hour
+    // of the 14 days. (The minimum alone no longer does: the body must also clear the horizon.)
     const sky = siteSky(
       hourlySky(sampledSpan(range)),
       { lat: 12.4, lon: -31.8 },
       { minSunElevationDeg: -90, minEarthElevationDeg: -90 },
       range,
+      {
+        elevations: new Float32Array(360).fill(-90),
+        radiusM: 1000,
+        spacingM: 80,
+        source: 'TEST: made up',
+      },
     );
-    // Everything counts as up at −90°: every hour of the 14 days.
     expect([sky.sunHours, sky.earthHours, sky.bothHours]).toEqual([336, 336, 336]);
+  });
+});
+
+describe('upTest (docs/LANDER_RULES.md, "Is it up: the upper limb")', () => {
+  // At 0° N 0° E (up +x, north +z): a body `distance` km from the site at `elevation`.
+  const site = { lat: 0, lon: 0 };
+  const at = (elevation: number, distance: number) => {
+    const e = (elevation * Math.PI) / 180;
+    return [MOON_RADIUS_KM + distance * Math.sin(e), 0, distance * Math.cos(e)] as const;
+  };
+  const AU = 149_597_870.7;
+
+  it('counts a body whose centre is at −0.1° as up for the horizon', () => {
+    const up = upTest(site);
+    expect(up(at(-0.1, AU), -1, SUN_RADIUS_KM)).toBe(true);
+    expect(up(at(-0.5, 384_400), -1, EARTH_RADIUS_KM)).toBe(true);
+    expect(up(at(-0.4, AU), -1, SUN_RADIUS_KM)).toBe(false);
+  });
+
+  it('keeps the mission’s minimum on the centre', () => {
+    const up = upTest(site);
+    // The limb is above 0° but the centre is below a 0° minimum.
+    expect(up(at(-0.1, AU), 0, SUN_RADIUS_KM)).toBe(false);
+    // The limb is above 5° but the centre is not.
+    expect(up(at(4.9, AU), 5, SUN_RADIUS_KM)).toBe(false);
+    expect(up(at(5.01, AU), 5, SUN_RADIUS_KM)).toBe(true);
+  });
+
+  it('tests the upper limb against a terrain horizon', () => {
+    const ridge: HorizonProfile = {
+      elevations: new Float32Array(360).fill(2),
+      radiusM: 1000,
+      spacingM: 80,
+      source: 'TEST: made up',
+    };
+    const up = upTest(site, ridge);
+    // Limb at 2.0065° and 1.9965° behind a 2° ridge.
+    expect(up(at(1.74, AU), 1, SUN_RADIUS_KM)).toBe(true);
+    expect(up(at(1.73, AU), 1, SUN_RADIUS_KM)).toBe(false);
   });
 });

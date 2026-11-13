@@ -50,7 +50,7 @@ export function StatusStrip({ missionName, site, positions = null, className }: 
         return {
           key: name,
           up: now.up,
-          text: `${describeElevation(name, now.elevationDeg)}${next}`,
+          text: `${describeElevation(name, now.elevationDeg, now.up)}${next}`,
         };
       })
     : [

@@ -6,7 +6,7 @@
  * our engine outside them). No new check or measure. Pure.
  */
 import { horizonsSky, type HorizonsSeries } from '../../services/horizonsData';
-import type { LatLon } from '../../utils/lunarSky';
+import { EARTH_RADIUS_KM, SUN_RADIUS_KM, type LatLon } from '../../utils/lunarSky';
 import { skyAtHour, upTest, type SkyThresholds } from '../../utils/skyVisibility';
 import type { HorizonProfile } from '../../utils/terrainShadow';
 import { DAY_MS, HOUR_MS, addMonthsUtc, formatDayMonth } from '../../utils/time';
@@ -84,8 +84,8 @@ export function yearWindows(
       horizonsLast = t;
     }
     const sky = fromSeries ?? skyAtHour(Math.floor(t / HOUR_MS));
-    const sun = up(sky.sun, site.thresholds.minSunElevationDeg);
-    const earth = up(sky.earth, site.thresholds.minEarthElevationDeg);
+    const sun = up(sky.sun, site.thresholds.minSunElevationDeg, SUN_RADIUS_KM);
+    const earth = up(sky.earth, site.thresholds.minEarthElevationDeg, EARTH_RADIUS_KM);
     const state: SkyState = sun && earth ? 'both' : sun ? 'sun' : earth ? 'earth' : 'none';
     const stop = Math.min(t + step, end);
     const last = runs[runs.length - 1];

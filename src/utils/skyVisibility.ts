@@ -8,9 +8,12 @@
  * that runs past the range's edge keeps its true start and end; the shares use the range only.
  */
 import {
+  EARTH_RADIUS_KM,
+  SUN_RADIUS_KM,
   aboveHorizonTest,
   azimuthElevationOf,
   lunarSky,
+  upperLimbTest,
   type LatLon,
   type LunarSky,
 } from './lunarSky';
@@ -144,23 +147,24 @@ export function bestWindow(
 }
 
 /**
- * The longest night inside the range: the longest unbroken run of hours with the Sun's centre below
- * the smooth horizon (0°). `atLeast` when that run touches the first or last hour of the range, so
- * the night may run on past it (docs/LANDER_RULES.md, "Power check").
+ * The longest night inside the range: the longest unbroken run of hours with the Sun's upper limb
+ * below the smooth horizon (0°; docs/LANDER_RULES.md, "Is it up: the upper limb"). `atLeast` when
+ * that run touches the first or last hour of the range, so the night may run on past it
+ * (docs/LANDER_RULES.md, "Power check").
  */
 export function longestDarkHours(
   samples: readonly SkySample[],
   site: LatLon,
   range: TimeRange,
 ): { hours: number; atLeast: boolean } {
-  const above = aboveHorizonTest(site);
+  const limbUp = upperLimbTest(site);
   const inRange = samples.filter((sample) => sample.t >= range.start && sample.t < range.end);
   let longest = 0;
   let longestTouchesEdge = false;
   let run = 0;
   let runFromStart = false;
   inRange.forEach((sample, index) => {
-    if (above(sample.sun, 0)) {
+    if (limbUp(sample.sun, SUN_RADIUS_KM)) {
       run = 0;
       return;
     }
@@ -182,20 +186,23 @@ export function sampledSpan(range: TimeRange): TimeRange {
 }
 
 /**
- * The checks' "up" test for a body seen from a site: at or above the minimum height and, with a
- * terrain horizon, above the terrain in its direction (docs/LANDER_RULES.md, "Terrain horizon").
- * Every check, share, hour and the Timeline use this one test.
+ * The checks' "up" test for a body (radius `radiusKm`) seen from a site: its upper limb above the
+ * horizon, the smooth 0° one or, with a terrain horizon, the terrain in its direction
+ * (docs/LANDER_RULES.md, "Is it up: the upper limb" and "Terrain horizon"); and its centre at or
+ * above the mission's minimum height, which stays on the centre. Every check, share, hour and the
+ * Timeline use this one test.
  */
 export function upTest(
   site: LatLon,
   terrain: HorizonProfile | null = null,
-): (target: LunarSky['sun'], minElevationDeg: number) => boolean {
-  const aboveSmooth = aboveHorizonTest(site);
-  return (target, minElevationDeg) => {
-    if (!aboveSmooth(target, minElevationDeg)) return false;
-    if (!terrain) return true;
-    const { azimuth, elevation } = azimuthElevationOf(target, site);
-    return elevation >= horizonAt(terrain, azimuth);
+): (target: LunarSky['sun'], minElevationDeg: number, radiusKm: number) => boolean {
+  const centreAtLeast = aboveHorizonTest(site);
+  const limbUp = upperLimbTest(site);
+  return (target, minElevationDeg, radiusKm) => {
+    if (!centreAtLeast(target, minElevationDeg)) return false;
+    if (!terrain) return limbUp(target, radiusKm);
+    const { azimuth } = azimuthElevationOf(target, site);
+    return limbUp(target, radiusKm, horizonAt(terrain, azimuth));
   };
 }
 
@@ -220,8 +227,8 @@ export function siteSky(
   const sunInRange: boolean[] = [];
   const windowInRange: boolean[] = [];
   const windowHours = samples.map((sample) => {
-    const sun = above(sample.sun, thresholds.minSunElevationDeg);
-    const earth = above(sample.earth, thresholds.minEarthElevationDeg);
+    const sun = above(sample.sun, thresholds.minSunElevationDeg, SUN_RADIUS_KM);
+    const earth = above(sample.earth, thresholds.minEarthElevationDeg, EARTH_RADIUS_KM);
     const window = sun && (thresholds.hasRelay === true || earth);
     if (sample.t >= range.start && sample.t < range.end) {
       inRange += 1;

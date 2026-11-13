@@ -99,7 +99,8 @@ function bestOf(
 
 /** "12° up · Forecast: dark in 2 d 4 h", or "below the horizon · Forecast: Earth rises in 5 d 2 h". */
 function nowText(body: SkyBody, now: BodyNow, time: number): string {
-  const where = now.up ? `${Math.round(now.elevationDeg)}° up` : 'below the horizon';
+  // Up by its upper limb, the centre can sit just below 0°: that reads "0° up".
+  const where = now.up ? `${Math.max(0, Math.round(now.elevationDeg))}° up` : 'below the horizon';
   if (!now.next) return `${where} · does not ${now.up ? 'set' : 'rise'} in the next 32 days`;
   return `${where} · ${forecastText(body, now.next, time)}`;
 }

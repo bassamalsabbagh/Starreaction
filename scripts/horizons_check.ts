@@ -25,7 +25,15 @@ import {
   type SkyBody,
 } from '../src/services/horizonsData';
 import { parseSites, type Site } from '../src/services/sites';
-import { azimuthElevationOf, lunarSky } from '../src/utils/lunarSky';
+import {
+  azimuthElevationOf,
+  EARTH_RADIUS_KM,
+  lunarSky,
+  SUN_RADIUS_KM,
+  surfacePoint,
+  type LatLon,
+  type Vec3,
+} from '../src/utils/lunarSky';
 import { parseHorizonsHeader, parseManualRows } from './lib/horizonsText';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,6 +44,19 @@ const LIMIT_DEG = 0.2;
  * the centre this close to the horizon are listed, not judged. A team assumption.
  */
 const NEAR_HORIZON_DEG = 1;
+
+/**
+ * The body's angular radius seen from the site at `t`, degrees: asin(R / distance), the distance
+ * from our engine (the Horizons files hold no distance). Rule: LANDER_RULES "Is it up".
+ */
+function angularRadiusAt(body: 'sun' | 'earth', site: LatLon, t: number): number {
+  const sky = lunarSky(new Date(t));
+  const target: Vec3 = body === 'sun' ? sky.sun : sky.earth;
+  const at = surfacePoint(site);
+  const distance = Math.hypot(target[0] - at[0], target[1] - at[1], target[2] - at[2]);
+  const radius = body === 'sun' ? SUN_RADIUS_KM : EARTH_RADIUS_KM;
+  return (Math.asin(radius / distance) * 180) / Math.PI;
+}
 const ENGINE_DAYS = { start: Date.UTC(2026, 10, 13), days: 3 };
 const ENGINE_SITES = ['im1', 'im2'];
 const MATCH_SITE_DEG = 0.05;
@@ -117,8 +138,9 @@ interface FlagRow {
   target: string;
   rows: number;
   agree: number;
-  disagree: { time: string; flag: string; says: boolean; centreDeg: number }[];
-  nearHorizon: { time: string; flag: string; says: boolean; centreDeg: number }[];
+  disagree: { time: string; flag: string; says: boolean; centreDeg: number; limbDeg: number }[];
+  /** Rows with the centre within NEAR_HORIZON_DEG of the horizon: judged too, listed to show them. */
+  nearHorizon: { time: string; flag: string; says: boolean; centreDeg: number; limbDeg: number }[];
   pass: boolean;
 }
 
@@ -203,15 +225,18 @@ async function main() {
         skipped.push({ file: name, reason: `row ${day(row.t)} is outside the API data` });
         continue;
       }
-      for (const [flag, says, centreDeg] of [
-        ['*', row.daylight, sun.elevation],
-        ['i', row.interferer, earth.elevation],
+      for (const [flag, says, centreDeg, body] of [
+        ['*', row.daylight, sun.elevation, 'sun'],
+        ['i', row.interferer, earth.elevation, 'earth'],
       ] as const) {
         flagRow.rows += 1;
         const entry = { time: day(row.t), flag, says, centreDeg };
-        if (Math.abs(centreDeg) < NEAR_HORIZON_DEG) flagRow.nearHorizon.push(entry);
-        else if (says === centreDeg > 0) flagRow.agree += 1;
-        else flagRow.disagree.push(entry);
+        // Horizons' flag: the upper limb on or above the horizon (elevation + angular radius > 0).
+        const limbDeg = centreDeg + angularRadiusAt(body, site, row.t);
+        const judged = { ...entry, limbDeg };
+        if (Math.abs(centreDeg) < NEAR_HORIZON_DEG) flagRow.nearHorizon.push(judged);
+        if (says === limbDeg > 0) flagRow.agree += 1;
+        else flagRow.disagree.push(judged);
       }
       if (row.azEl && header.target === 'Sun (10)') {
         const diff = Math.abs(row.azEl.elevation - sun.elevation);
@@ -306,9 +331,9 @@ async function main() {
     '',
     '## (b) Daylight and Earth flags in the manual exports',
     '',
-    `Each row's \`*\` (daylight) and \`i\` (Earth above the horizon) flag against the API data at the same time. Horizons sets these flags from the disc's upper limb, while the API data is the centre; converting between them needs the disc's angular radius, which no agreed equation gives, so rows with the centre within ${NEAR_HORIZON_DEG}° of the horizon are listed below and not judged (a team assumption).`,
+    `Each row's \`*\` (daylight) and \`i\` (Earth above the horizon) flag against the API data at the same time. Horizons sets these flags from the disc's upper limb, while the API data is the centre; so every row is judged by the upper limb: centre elevation + angular radius (asin(R / distance), R_sun = 695,700 km, R_earth = 6,378.137 km, the distance from our engine) must be above 0° exactly when Horizons sets the flag (LANDER_RULES, "Is it up: the upper limb"). Rows with the centre within ${NEAR_HORIZON_DEG}° of the horizon are listed below as close calls; they are judged too.`,
     '',
-    '| File | Site | Target | Flags compared | Agree | Disagree | Near horizon (not judged) | Result |',
+    '| File | Site | Target | Flags compared | Agree | Disagree | Close calls (judged) | Result |',
     '| --- | --- | --- | --- | --- | --- | --- | --- |',
     ...flags.map(
       (row) =>
@@ -318,15 +343,17 @@ async function main() {
   ];
   const listed = flags.flatMap((row) => [
     ...row.disagree.map((entry) => ({ ...entry, file: row.file, kind: 'DISAGREES' })),
-    ...row.nearHorizon.map((entry) => ({ ...entry, file: row.file, kind: 'near horizon' })),
+    ...row.nearHorizon
+      .filter((entry) => !row.disagree.includes(entry))
+      .map((entry) => ({ ...entry, file: row.file, kind: 'close call, agrees' })),
   ]);
   if (listed.length > 0) {
     md.push(
-      '| File | Time (UTC) | Flag | Horizons says | API centre elevation | Kind |',
-      '| --- | --- | --- | --- | --- | --- |',
+      '| File | Time (UTC) | Flag | Horizons says | Centre elevation | Upper limb | Kind |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
       ...listed.map(
         (entry) =>
-          `| ${entry.file} | ${entry.time} | \`${entry.flag}\` | ${entry.says ? 'up' : 'down'} | ${fmt(entry.centreDeg)}° | ${entry.kind} |`,
+          `| ${entry.file} | ${entry.time} | \`${entry.flag}\` | ${entry.says ? 'up' : 'down'} | ${fmt(entry.centreDeg)}° | ${fmt(entry.limbDeg)}° | ${entry.kind} |`,
       ),
       '',
     );
@@ -364,7 +391,7 @@ async function main() {
   }
   for (const row of flags) {
     console.log(
-      `(b) ${row.file}: ${row.agree}/${row.rows} agree, ${row.disagree.length} disagree, ${row.nearHorizon.length} near horizon`,
+      `(b) ${row.file}: ${row.agree}/${row.rows} agree, ${row.disagree.length} disagree (${row.nearHorizon.length} close calls, judged)`,
     );
   }
   for (const row of elevations) {
