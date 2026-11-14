@@ -16,6 +16,52 @@ Pick a place and a date on the Moon, and see at once whether a mission gets sunl
 the Earth in view to talk home, how long until sunset and Earthset, and what changes if the plan
 slips.
 
+## 2b. Project details (submission text)
+
+**StarReaction is an interactive lunar landing-site and landing-date planning platform focused on the Moon's south pole.** At the lunar south pole, water ice is found in permanently shadowed regions, while solar power depends on access to sunlight. StarReaction addresses this challenge by showing, for any selected location and date range, how much sunlight a lander receives, when Earth is visible, and how often both conditions occur simultaneously.
+
+### How it works
+
+Users can select a location directly on an interactive 3D Moon, enter coordinates, or explore historical landing sites such as IM-1 and IM-2. They can then define mission requirements and select a start and end date.
+
+The platform provides:
+
+- **Sun Up:** Identifies the days when the Sun is above the local horizon, indicating potential solar power opportunities.
+- **Earth in View:** Identifies when Earth is above the local horizon, indicating potential direct-to-Earth communication windows.
+- **Sun + Earth Together:** Combines both conditions to identify periods when the lander can potentially generate solar power while maintaining direct visibility of Earth. Results are evaluated against user-defined mission requirements using clear Pass/Fail indicators.
+- **Alternative Landing Dates:** Explores how changes in the mission schedule affect sunlight and communication availability and identifies more favorable nearby dates.
+- **Power and Battery Analysis:** Calculates the longest darkness period within the selected date range and estimates the battery capacity needed to sustain the lander. The Moon Power Lab also allows users to experiment with battery configurations.
+- **Site Comparison:** Enables side-by-side evaluation of multiple landing locations under the same date and mission requirements.
+- **Terrain Layers:** Displays lunar elevation, slope, and surface roughness using NASA LOLA data.
+
+### Tools and technologies
+
+StarReaction was developed using TypeScript and React, with CesiumJS providing the interactive 3D lunar environment.
+
+For celestial calculations, we use NASA JPL Horizons as a reference for selected historical landing sites and our own calculation engine, based on astronomy-engine, for other locations. We validated our engine against Horizons, achieving an angular difference within 0.007° in our comparisons.
+
+Terrain layers were generated using Python scripts and NASA's Lunar Orbiter Laser Altimeter (LOLA) datasets. Historical landing-site coordinates were cross-checked using LROC QuickMap.
+
+We also prioritized data transparency: numerical results are linked to their sources, and unavailable published data is identified rather than replaced with invented values.
+
+### Creativity and innovation
+
+Existing lunar mapping tools primarily focus on visualizing terrain and geographic information. StarReaction takes a different approach: it acts as a mission-planning advisor by integrating solar power opportunities and Earth communication visibility into one location- and date-specific assessment.
+
+A location may receive sufficient sunlight but still have limited Earth visibility. By identifying when both conditions occur together, StarReaction provides a more realistic picture of a lander's operational opportunities rather than evaluating sunlight or communication independently.
+
+### Factors considered
+
+Our team considered the extremely low solar elevation angles near the lunar south pole, prolonged periods of darkness, battery requirements, Earth visibility above the local horizon, terrain slope and roughness, possible mission schedule delays, and the scientific importance of polar regions containing potential water-ice resources.
+
+### Future development
+
+Future improvements include incorporating local terrain horizons to account for hills and other obstacles that may block the Sun or Earth, generating regional sunlight and Earth-visibility maps, and developing an intelligent recommendation system that identifies more favorable nearby landing locations.
+
+### Intended impact
+
+StarReaction aims to help future lunar mission planners make better-informed decisions about where and when to land by bringing power availability, communication opportunities, and terrain information into a unified platform. Ultimately, we hope to contribute to more reliable robotic exploration and help prepare the way for sustained human presence on the Moon.
+
 ## 3. Text
 
 ### About
