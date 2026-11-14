@@ -15,8 +15,17 @@ export function enabledWhenOn(value: unknown): boolean {
 export const SLIP_ASSISTANT_ENABLED: boolean = enabledWhenOn(import.meta.env.VITE_SLIP_ASSISTANT);
 
 /**
- * The visibility prototype's Layers tile: shown only once its browser verification has passed
- * (on since 2026-11-14 by team decision: Sun and Earth visibility are layers, no longer labelled
- * a prototype). Not a build variable: set it here.
+ * The Sun visibility and Earth visibility Layers tiles. Off since 2026-11-14 by team decision: only
+ * Elevation and Slope show for now, and the Future plans note on the About page says the rest is
+ * coming. The code and data stay; set it back to true to show the tiles. Not a build variable:
+ * set it here.
  */
-export const VISIBILITY_VERIFIED: boolean = true;
+export const VISIBILITY_VERIFIED: boolean = false;
+
+/**
+ * The terrain horizon (hills hiding the Sun and Earth). OFF since 2026-11-14 by team decision: every
+ * point, IM-1 and IM-2 included, uses the flat horizon, and About > Future plans says terrain
+ * horizons from LOLA elevation data are coming. The code and src/data/terrainHorizons.ts stay; set
+ * it to true to use them again. Not a build variable: set it here.
+ */
+export const TERRAIN_HORIZON_ENABLED: boolean = false;

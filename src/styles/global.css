@@ -115,6 +115,8 @@
   --panel-gap: var(--space-3);
   /* The time bar's height, open and folded to a line; overlays above it stack on top. */
   --time-bar-height: 6.5rem;
+  /* With the left panel open the bar may need a second line (TimeBar.module.css). */
+  --time-bar-height-wrapped: 9rem;
   --time-bar-folded-height: 2.25rem;
   /* The status line (lander, clock, Sun and Earth) just above the time bar. */
   --status-line-height: 2.5rem;

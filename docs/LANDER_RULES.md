@@ -470,6 +470,18 @@ south polar stereographic grid of the 1737.4 km sphere (centre 90° S, 0° E up)
   longer used for display or readout. **Not done:** moving the camera to a straight-down south-pole
   view when a layer is switched on (plan C4): the app has no such view yet.
 
+### Map layer: roughness (added 2026-11-14)
+
+Display and readout only: it never changes a check or a ranking. Source DATA_SOURCES SRC-075 (NASA
+PGDA per the user; product and definition TODO). Built by the same script as elevation and slope
+(`scripts/data/make_map_layers.py --only roughness`), on its own 50 m grid: values at 50 m in a
+1024-pixel patch around each site south of 80° S and as the mean of 4 × 4 pixels (200 m) elsewhere,
+stored in 1 mm steps; colours only from `Roughness_color.tiff`. Elevation and slope are not rebuilt.
+The reader looks each level up in its own pixels, so 40 m and 50 m layers share one index. Legend
+ends "Smooth" and "Rough" are the 1st and 99th percentiles of the 200 m grid
+(`scripts/data/legend_range.py`): 0.34 m and 1.52 m. Decoded tiles against the original:
+docs/LAYER_CHECK_ROUGHNESS.md (all pass).
+
 ### Visibility prototype layer
 
 Since 2026-11-14 (team decision) the layer shows as two Layers tiles, **Sun visibility** and

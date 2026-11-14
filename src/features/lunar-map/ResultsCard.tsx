@@ -106,9 +106,6 @@ export function ResultsCard({
       </section>
 
       <div className={styles.actions}>
-        <button type="button" className={styles.action} onClick={onCompare}>
-          Compare with another location
-        </button>
         <button
           type="button"
           className={styles.action}
@@ -117,8 +114,11 @@ export function ResultsCard({
         >
           More details ›
         </button>
+        <button type="button" className={styles.action} onClick={onCompare}>
+          Compare with another location
+        </button>
       </div>
-      <p className={styles.data}>{DATA_TEXT[dataSource]}</p>
+      <p className={styles.data}>{DATA_TEXT[dataSource]} · flat horizon (hills not included)</p>
     </article>
   );
 }

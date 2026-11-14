@@ -26,7 +26,7 @@ function profile(cut: readonly number[] | null): HorizonProfile {
   return result;
 }
 
-function renderView(terrain: HorizonProfile | null, kind?: 'site' | 'point') {
+function renderView(terrain: HorizonProfile | null) {
   return render(
     <HorizonView
       place={PLACE}
@@ -35,7 +35,6 @@ function renderView(terrain: HorizonProfile | null, kind?: 'site' | 'point') {
       earth={bodyNow(PLACE, 'earth', TIME)}
       minSunElevationDeg={5}
       terrain={terrain}
-      kind={kind}
     />,
   );
 }
@@ -46,13 +45,8 @@ const span = (from: number, to: number) =>
 describe('HorizonView', () => {
   it('says the horizon is flat when a site has no terrain data', () => {
     renderView(null);
-    expect(screen.getByText('Flat horizon: no terrain data for this site')).toBeInTheDocument();
+    expect(screen.getByText('Flat horizon (hills not included)')).toBeInTheDocument();
     expect(screen.queryAllByTestId('edge-cut-band')).toHaveLength(0);
-  });
-
-  it('says "this point" for a picked point', () => {
-    renderView(null, 'point');
-    expect(screen.getByText('Flat horizon: no terrain data for this point')).toBeInTheDocument();
   });
 
   it('marks directions cut off at the data edge with a band and names them', () => {

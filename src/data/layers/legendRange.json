@@ -28,6 +28,20 @@
         0.0,
         89.27
       ]
+    },
+    "roughness": {
+      "min": 0.34,
+      "max": 1.52,
+      "lowPercentile": 1,
+      "highPercentile": 99,
+      "validPixels": 8519680,
+      "gridMin": 0.16,
+      "gridMax": 22.95,
+      "patchMax40m": 28.57,
+      "indexLegend": [
+        0.06,
+        46.19
+      ]
     }
   }
 }

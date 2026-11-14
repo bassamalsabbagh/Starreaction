@@ -208,6 +208,15 @@ export function AboutPanel({
                   </li>
                 ) : null}
               </ul>
+              <h3 className={styles.subhead}>Future plans</h3>
+              <p>
+                Sun and Earth visibility maps for the whole south pole, checked against NASA
+                lighting maps.
+              </p>
+              <p>
+                Terrain horizon: hills around each site can hide the Sun and Earth; we will add
+                horizons from LOLA elevation data for the whole south pole.
+              </p>
               {slipAssistant ? (
                 <p className={styles.note} data-testid="ai-notice">
                   The &ldquo;Launch slipped?&rdquo; box sends what you type to Google&apos;s Gemini
@@ -271,8 +280,8 @@ export function AboutPanel({
                   ? `JPL Horizons at the four landing sites ${HORIZONS_DATES}; our engine (astronomy-engine) for clicked points and other dates, checked against JPL Horizons`
                   : 'our engine (astronomy-engine), checked against JPL Horizons'}
                 , and the sites are real landings. The mission&apos;s needs are yours. The horizon
-                is a smooth Moon: crater rims and hills, which matter most at the south pole, are
-                not counted yet.
+                is flat (hills not included): crater rims and hills, which matter most at the south
+                pole, are not counted yet.
               </p>
             </div>
           ) : null}

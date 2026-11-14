@@ -19,15 +19,21 @@ export function AboutNotes() {
           m), not a pass or fail.
         </li>
         <li>
+          <span className={styles.strong}>Roughness.</span> South pole only (80°S to 90°S), in
+          metres, from NASA PGDA at 50 m (200 m away from the landing sites). It does not change
+          with the date and is not a pass or fail. The legend ends are the 1st and 99th percentiles,
+          not the extremes.
+        </li>
+        <li>
           <span className={styles.strong}>Sun visibility and Earth visibility.</span> {PREVIEW_LINE}{' '}
           {VISIBILITY_LABEL}. {VISIBILITY_MEANING} South pole only (80°S to 90°S). Frames cover 24
           Nov to 8 Dec 2026, every 10 minutes; at other times the layer says &ldquo;No frame for
           this time&rdquo;.
         </li>
         <li>
-          <span className={styles.strong}>Terrain horizon (test).</span> Only IM-1 and IM-2 have a
-          terrain horizon. Every other place is checked against a smooth Moon, so crater rims and
-          hills are not counted.
+          <span className={styles.strong}>Flat horizon.</span> Every place, IM-1 and IM-2 included,
+          is checked against a flat horizon (hills not included), so crater rims and hills are not
+          counted. Terrain horizons are a future plan.
         </li>
         <li>
           <span className={styles.strong}>Power and battery.</span> Sunlight 1361 W/m² (NASA Moon

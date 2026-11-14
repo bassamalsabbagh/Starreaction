@@ -102,7 +102,7 @@ export function validateDraft(draft: MissionDraft): DraftErrors {
   return errors;
 }
 
-/** The name, or the name with the next free number ("My mission (2)") if it is taken. */
+/** The name, or the name with the next free number ("My lander (2)") if it is taken. */
 export function uniqueName(name: string, taken: readonly string[]): string {
   const base = name.trim();
   const used = new Set(taken.map((item) => item.toLowerCase()));

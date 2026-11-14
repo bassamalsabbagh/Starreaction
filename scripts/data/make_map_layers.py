@@ -38,11 +38,16 @@ GRID_EDGE_M = 304000.0
 QUADRANT_PX = 2048
 PREVIEW_PX = 512
 LAYERS = ('elevation', 'slope')
+# Built one at a time with --only (its own grid; merged into index.json, other layers untouched).
+EXTRA_LAYERS = ('roughness',)
 ENCODING = {
     'elevation': {'type': 'int16', 'scale': 1.0, 'offset': 0.0, 'nodata': -32768, 'unit': 'm'},
     'slope': {'type': 'uint16', 'scale': 0.01, 'offset': 0.0, 'nodata': 65535, 'unit': '°'},
+    # Metres (the user, 2026-11-14), 1 mm steps: 0 to 65.534 m (the file's maximum is 63.25 m).
+    'roughness': {'type': 'uint16', 'scale': 0.001, 'offset': 0.0, 'nodata': 65535, 'unit': 'm'},
 }
-LABEL = {'elevation': 'Elevation', 'slope': 'Slope'}
+LABEL = {'elevation': 'Elevation', 'slope': 'Slope', 'roughness': 'Roughness'}
+LEGEND_STEP = {'elevation': 500.0, 'slope': 5.0, 'roughness': 0.25}
 
 
 # ---- projection (south polar stereographic on the 1737.4 km sphere, 0 E up; team sheet 1.2) ----
@@ -134,11 +139,12 @@ def read_tiff(path):
     if tags[33922][:2] != (0.0, 0.0):
         raise RasterError(f'{path.name}: expected the tiepoint at raster position (0, 0)')
     x0, y0 = tags[33922][3], tags[33922][4]
-    # The rest of this script (and the app's description) assumes this exact grid.
-    if (width, height, pixel, x0, y0) != (GRID_PX, GRID_PX, GRID_M, -GRID_EDGE_M, GRID_EDGE_M):
+    # The same +-304 km square as the 40 m rasters; another pixel size is allowed (Roughness: 50 m)
+    # as long as the pixels tile the square exactly.
+    if (x0, y0) != (-GRID_EDGE_M, GRID_EDGE_M) or width != height or width * pixel != 2 * GRID_EDGE_M:
         raise RasterError(
-            f'{path.name}: expected {GRID_PX} x {GRID_PX} at {GRID_M:g} m from '
-            f'({-GRID_EDGE_M:g}, {GRID_EDGE_M:g}); got {width} x {height} at {pixel:g} m from ({x0:g}, {y0:g})')
+            f'{path.name}: expected a square grid covering ({-GRID_EDGE_M:g}, {GRID_EDGE_M:g}) to '
+            f'({GRID_EDGE_M:g}, {-GRID_EDGE_M:g}); got {width} x {height} at {pixel:g} m from ({x0:g}, {y0:g})')
     nodata = tags.get(42113)
     shape = (height, width) if bands == 1 else (height, width, 4)
     data = np.memmap(path, dtype=dtype, mode='r', offset=offsets[0], shape=shape)
@@ -332,11 +338,14 @@ def site_patches(pixel):
     return patches
 
 
-def build_layer(layer, folder, out_public, patches, checks, report, values_path=None):
+def build_layer(layer, folder, out_public, patches, checks, report, values_path=None,
+                colour_path=None):
     entry = {'id': layer, 'label': LABEL[layer], 'unit': ENCODING[layer]['unit'],
              'valuesFile': f'{layer}_40m.tif', 'colourFile': f'{layer}_40m_color.tif',
              'values': None, 'valuesUnavailable': None, 'display': None, 'legend': None}
-    colour = read_tiff(folder / entry['colourFile'])
+    if colour_path is not None:
+        entry['colourFile'] = Path(colour_path).name
+    colour = read_tiff(Path(colour_path) if colour_path else folder / entry['colourFile'])
     pixel = colour['pixel']
     try:
         if values_path is not None:
@@ -426,7 +435,7 @@ def build_layer(layer, folder, out_public, patches, checks, report, values_path=
                                      layer_dir / 'values' / patch['id'])
         levels.append(level)
     entry['values'] = {'encoding': ENCODING[layer], 'levels': levels}
-    entry['legend'] = legend(data, nodata, colour, 5.0 if layer == 'slope' else 500.0)
+    entry['legend'] = legend(data, nodata, colour, LEGEND_STEP[layer])
     checks.extend(check_points(layer, values, levels, patches, layer_dir))
     return entry
 
@@ -535,11 +544,26 @@ def main():
     parser.add_argument('--source-id', required=True)
     parser.add_argument('--values', action='append', default=[], metavar='LAYER=PATH',
                         help='use this numerical file for a layer instead of <layer>_40m.tif')
+    parser.add_argument('--colour', action='append', default=[], metavar='LAYER=PATH',
+                        help='use this colour file for a layer instead of <layer>_40m_color.tif')
+    parser.add_argument('--only', choices=EXTRA_LAYERS,
+                        help='build only this layer on its own grid and add it to the existing '
+                             'index.json; every other layer and its files stay as they are')
     args = parser.parse_args()
     folder = Path(args.folder)
     out_public = ROOT / 'public' / 'data' / 'layers'
     out_src = ROOT / 'src' / 'data' / 'layers'
     out_src.mkdir(parents=True, exist_ok=True)
+    if args.only:
+        pairs = {}
+        for option, items in (('--values', args.values), ('--colour', args.colour)):
+            for item in items:
+                layer, _, path = item.partition('=')
+                if layer != args.only or not path:
+                    sys.exit(f'{option} expects {args.only}=PATH with --only, got {item!r}')
+                pairs[option] = path
+        build_only(args, folder, out_public, out_src, pairs)
+        return
     reference = read_tiff(folder / 'slope_40m_color.tif')
     patches = site_patches(reference['pixel'])
     checks, report = [], []
@@ -595,6 +619,45 @@ def main():
         print(('ok  ' if c['pass'] else 'FAIL') + f" {c['layer']} {c['label']}: original {c['original']} decoded {c['decoded']}")
     for line in report:
         print(line)
+    if not all_pass:
+        sys.exit(1)
+
+
+def build_only(args, folder, out_public, out_src, pairs):
+    """One extra layer on its own grid (its own site patches and a 4x base), added to the existing
+    index.json. The other layers' entries, tiles and images are not touched; its checks go to their
+    own files."""
+    layer = args.only
+    index_path = out_src / 'index.json'
+    manifest = json.loads(index_path.read_text(encoding='utf-8'))
+    colour_path = pairs.get('--colour') or str(folder / f'{layer}_color.tif')
+    values_path = pairs.get('--values') or str(folder / f'{layer}.tif')
+    colour = read_tiff(colour_path)
+    patches = site_patches(colour['pixel'])
+    checks, report = [], []
+    entry = build_layer(layer, folder, out_public, patches, checks, report, values_path, colour_path)
+    entry['sourceId'] = args.source_id
+    manifest['layers'] = [item for item in manifest['layers'] if item['id'] != layer] + [entry]
+    index_path.write_text(json.dumps(manifest, indent=1) + '\n', encoding='utf-8')
+    (out_src / f'check-{layer}.json').write_text(json.dumps(checks, indent=1) + '\n', encoding='utf-8')
+    all_pass = all(c['pass'] for c in checks)
+    lines = [f'# Map layer {layer}: decoded tiles against the original raster', '',
+             f'Generated by `scripts/data/make_map_layers.py --only {layer}`; do not edit by hand. '
+             f'Source: DATA_SOURCES {args.source_id}. Pixel {colour["pixel"]:g} m (site patches), '
+             f'{colour["pixel"] * BASE_FACTOR:g} m (base). The point labels say 40 m and 160 m '
+             'for the elevation and slope grids; here read them as these sizes.', '',
+             f'**Overall: {"all checks pass" if all_pass else "SOME CHECKS FAIL"}.**', '']
+    lines += report + REPORT_ZERO + ['']
+    lines += ['| Point | Lat | Lon | Level | Original pixel | Expected | Decoded | Result |',
+              '| --- | --- | --- | --- | --- | --- | --- | --- |']
+    for c in checks:
+        lines.append(f"| {c['label']} | {c['lat']} | {c['lon']} | {c['level']} | "
+                     f"{c.get('originalPixel')} | {c['original']} | {c['decoded']} | "
+                     f"{'Pass' if c['pass'] else '**FAIL**'} |")
+    (ROOT / 'docs' / f'LAYER_CHECK_{layer.upper()}.md').write_text('\n'.join(lines) + '\n',
+                                                                  encoding='utf-8')
+    for c in checks:
+        print(('ok  ' if c['pass'] else 'FAIL') + f" {c['label']}: original {c['original']} decoded {c['decoded']}")
     if not all_pass:
         sys.exit(1)
 

@@ -30,7 +30,7 @@ const FIELD_HELP: Readonly<Record<MissionField, { label: string; help: string }>
 const SHOWN: readonly MissionField[] = ['minSunElevationDeg', 'daysNeeded', 'minEarthElevationDeg'];
 
 /** The name used when the box is left empty. */
-export const DEFAULT_MISSION_NAME = 'My mission';
+export const DEFAULT_MISSION_NAME = 'My lander';
 
 interface MissionStepProps {
   draft: MissionDraft;
@@ -52,7 +52,7 @@ function endLabel(value: number, unit: string): string {
  */
 export function MissionStep({ draft, onChange }: MissionStepProps) {
   const id = useId();
-  // The name is never an error: left empty it becomes "My mission".
+  // The name is never an error: left empty it becomes "My lander".
   const errors = validateDraft({ ...draft, name: draft.name.trim() || DEFAULT_MISSION_NAME });
   const setValue = (field: MissionField, value: string) =>
     onChange({ ...draft, values: { ...draft.values, [field]: value } });
@@ -61,7 +61,7 @@ export function MissionStep({ draft, onChange }: MissionStepProps) {
     <div className={styles.tight}>
       <div className={styles.field}>
         <label className={styles.label} htmlFor={`${id}-name`}>
-          Mission name
+          Name (optional)
         </label>
         <input
           id={`${id}-name`}

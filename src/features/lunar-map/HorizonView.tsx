@@ -16,7 +16,6 @@ interface HorizonViewProps {
   /** The terrain skyline around the place, when elevation data is loaded for it. */
   terrain: HorizonProfile | null;
   /** What the place is, for the flat-horizon label ("no terrain data for this site"). */
-  kind?: 'site' | 'point';
   /** A fixed site's JPL Horizons positions (the engine where they have no data, and for points). */
   series?: HorizonsSeries | null;
 }
@@ -53,7 +52,6 @@ export function HorizonView({
   earth,
   minSunElevationDeg,
   terrain,
-  kind = 'site',
   series = null,
 }: HorizonViewProps) {
   const titleId = useId();
@@ -266,7 +264,7 @@ export function HorizonView({
         <span className={styles.horizonNote}>
           {terrain
             ? `Terrain horizon: ${terrain.source}, known to ${Math.round(terrain.radiusM / 1000)} km`
-            : `Flat horizon: no terrain data for this ${kind}`}
+            : 'Flat horizon (hills not included)'}
         </span>
       </figcaption>
     </figure>

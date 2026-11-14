@@ -108,7 +108,6 @@ export function LayerPanel({
               strokeLinecap="round"
             />
           </svg>
-          <span aria-hidden="true">Close</span>
         </button>
       </header>
 

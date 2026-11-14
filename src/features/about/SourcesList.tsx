@@ -81,6 +81,10 @@ export function SourcesList() {
           layers: the team&apos;s preview grids (9.6 km, 2 m assumed height).
         </li>
         <li>
+          Roughness layer: NASA Planetary Geodesy Data Archive (PGDA), 50 m, in metres (the exact
+          product and how roughness is defined are still to be recorded).
+        </li>
+        <li>
           The full register, with access dates and conflicts, is docs/DATA_SOURCES.md in the
           project.
         </li>

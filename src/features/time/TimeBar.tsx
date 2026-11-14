@@ -224,6 +224,8 @@ export function TimeBar({
           +1 day
         </button>
 
+        <span className={styles.lineBreak} aria-hidden="true" />
+
         <label className={styles.speedPick}>
           <span className={styles.speedWord}>Speed:</span>
           <select

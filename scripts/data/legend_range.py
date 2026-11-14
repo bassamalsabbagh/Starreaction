@@ -20,7 +20,7 @@ LAYERS = ROOT / 'public' / 'data' / 'layers'
 INDEX = ROOT / 'src' / 'data' / 'layers' / 'index.json'
 OUT = ROOT / 'src' / 'data' / 'layers' / 'legendRange.json'
 # (low percentile or None for the layer's floor of 0, high percentile)
-PERCENTILES = {'elevation': (1, 99), 'slope': (None, 99)}
+PERCENTILES = {'elevation': (1, 99), 'slope': (None, 99), 'roughness': (1, 99)}
 
 
 def valid_values(layer, level):
