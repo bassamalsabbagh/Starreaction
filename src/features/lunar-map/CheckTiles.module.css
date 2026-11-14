@@ -1,0 +1,92 @@
+/* The three check tiles: the same in Results and in each Compare card. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.tileLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  line-height: 1.2;
+}
+
+.tileValue {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.word {
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+}
+
+.ok {
+  color: var(--color-score-great);
+}
+
+.fail {
+  color: var(--color-score-poor);
+}
+
+/* "Best" is a word, never colour alone. */
+.best {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-wizard-current);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-wizard-current) 25%, transparent);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.failLine {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.25;
+}
+
+/* In a Compare card: tighter. */
+.compact .tile {
+  padding: var(--space-1) var(--space-2);
+}
+
+.compact .tileLabel {
+  font-size: var(--font-size-xs);
+}
+
+.compact .tileValue {
+  font-size: var(--font-size-sm);
+}
+
+/* Pass is green with a tick, Fail red with a cross: never colour alone. */
+.word.ok::before {
+  content: '\2713\00a0';
+}
+
+.word.fail::before {
+  content: '\2717\00a0';
+}

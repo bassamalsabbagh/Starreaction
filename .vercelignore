@@ -18,6 +18,8 @@ public/cesium/
 *.tif
 *.tiff
 data-raw/
+data/raw/
+data/horizons-api/
 scripts/data/.venv/
 __pycache__/
 

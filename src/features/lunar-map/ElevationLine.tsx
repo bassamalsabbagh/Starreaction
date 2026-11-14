@@ -1,33 +1,75 @@
-import { elevationAt, formatElevation } from '../../utils/elevationGrid';
+import { useCallback } from 'react';
+import { StatusTag } from '../../components/StatusTag';
+import {
+  MAP_LAYERS,
+  layerValueAt,
+  type MapLayer,
+  type MapLayersManifest,
+} from '../../services/mapLayers';
 import type { LatLon } from '../../utils/lunarSky';
-import type { ElevationState } from './useElevationGrid';
+import { OUTSIDE_TEXT, readingStatus, readoutText } from './mapLayerState';
+import { useLayerReading } from './useLayerReading';
 import styles from './ElevationLine.module.css';
 
+/** One layer's value at the place, from its value tiles, always named ("Elevation: No data"). */
+function LayerValue({
+  layer,
+  place,
+  manifest,
+}: {
+  layer: MapLayer;
+  place: LatLon;
+  manifest: MapLayersManifest;
+}) {
+  const read = useCallback(
+    (which: MapLayer, point: LatLon) => layerValueAt(which, point, manifest),
+    [manifest],
+  );
+  const reading = useLayerReading(layer, place, read);
+  const status = reading ? readingStatus(reading) : null;
+  const text = reading
+    ? reading.kind === 'value'
+      ? readoutText(layer, reading)
+      : `${layer.label}: ${readoutText(layer, reading)}`
+    : `${layer.label}: reading…`;
+  return (
+    <span className={styles.main}>
+      {text}
+      {status ? <StatusTag>{status}</StatusTag> : null}
+    </span>
+  );
+}
+
 /**
- * Elevation and slope on the place card (docs/LANDER_RULES.md, "Elevation and slope at a point"):
- * a fact with its source and pixel size, or why there is none. No pass/fail.
+ * Elevation and slope on the place card (docs/LANDER_RULES.md, "Map layers: elevation and slope"):
+ * each map layer's value at the place, with its resolution and status, read from the team's value
+ * tiles; outside 80° S to the pole, one line saying so. Facts only, no pass/fail.
  */
-export function ElevationLine({ place, elevation }: { place: LatLon; elevation: ElevationState }) {
-  let main: string;
-  let sub: string | null = null;
-  if (elevation.status === 'none') main = 'No elevation data loaded yet';
-  else if (elevation.status === 'loading') main = 'Loading elevation data…';
-  else if (elevation.status === 'failed') main = 'The elevation data could not be loaded';
-  else {
-    const { manifest } = elevation.grid;
-    const result = elevationAt(elevation.grid, place);
-    if (result.kind === 'ok') {
-      main = formatElevation(result);
-      sub = `${manifest.source.title} (${manifest.source.id}) · ${Math.round(manifest.pixelSizeM)} m per pixel`;
-    } else {
-      main = 'No elevation data here';
-      sub = `The elevation data covers the pole out to ${Math.abs(manifest.maxLatDeg)}° S`;
-    }
-  }
+export function ElevationLine({
+  place,
+  manifest = MAP_LAYERS,
+}: {
+  place: LatLon;
+  manifest?: MapLayersManifest | null;
+}) {
+  if (!manifest) return null;
+  const inside = place.lat <= manifest.coverMaxLatDeg;
   return (
     <p className={styles.line} data-testid="elevation-line">
-      <span className={styles.main}>{main}</span>
-      {sub ? <span className={styles.sub}>{sub}</span> : null}
+      {inside ? (
+        manifest.layers.map((layer) => (
+          <LayerValue key={layer.id} layer={layer} place={place} manifest={manifest} />
+        ))
+      ) : (
+        <span className={styles.main}>
+          {manifest.layers.map((layer) => layer.label).join(' and ')}: {OUTSIDE_TEXT}
+        </span>
+      )}
+      {inside ? (
+        <span className={styles.sub}>
+          Slope: average over one pixel (160 m or 40 m), not a pass/fail.
+        </span>
+      ) : null}
     </p>
   );
 }

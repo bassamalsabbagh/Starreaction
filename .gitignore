@@ -33,6 +33,10 @@ pnpm-debug.log*
 *.tif
 *.tiff
 data-raw/
+# Mahmoud's LOLA and PGDA source files (data/raw/README.txt describes them)
+data/raw/
+# Raw JPL Horizons API replies cached by scripts/fetch_horizons.ts (the app uses public/data/horizons/)
+data/horizons-api/
 # The data scripts' own Python environment and caches
 scripts/data/.venv/
 __pycache__/

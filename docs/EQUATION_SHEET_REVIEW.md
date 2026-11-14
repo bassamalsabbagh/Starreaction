@@ -1,4 +1,4 @@
-# Equation sheet review (2026-11-13)
+# Equation sheet review
 
 Overnight plan item 8, **report only: no code was changed from it**. Read:
 `docs/team/Lunar Lander Site Equation Sheet.docx`, including Miral's power equations (M4, M5, M8).
@@ -7,7 +7,7 @@ Each equation is marked:
 - **In the app:** already built (where).
 - **Add as check / measure / mission value:** fits the app's rules once its inputs are sourced.
 - **Conflicts:** goes against `CLAUDE.md` ("No weighted scores", "No speculative scoring
-  formulas"; the weighted score was retired on 2026-11-11).
+  formulas"; the weighted score was retired).
 - **Not needed:** handled another way, or out of scope.
 
 ## Equations
@@ -35,7 +35,7 @@ Each equation is marked:
 | §5.3         | Power: P_rel, S_power = clamp(P_peak·P_rel ÷ P_needed)              | Conflicts as a score; **add as a measure**      | The ratio in watts could become a measure (like % of needs met) or a pass/fail "≥ 1" once P_peak and P_needed are sourced **mission values**. The Power check (item 9) is the information-only version.                                                                                         |
 | §5.4         | Earth score with E_ref = 10°                                        | Conflicts                                       | A score. The condition under it is the app's Comms check.                                                                                                                                                                                                                                       |
 | §5.5         | Science score 0–1                                                   | Conflicts                                       | Subjective, weighted: "no speculative scoring formulas".                                                                                                                                                                                                                                        |
-| §5.6         | Overall score 100 × (0.25, 0.20, 0.20, 0.15, 0.20 weights)          | Conflicts                                       | "No weighted scores" (CLAUDE.md); retired 2026-11-11.                                                                                                                                                                                                                                           |
+| §5.6         | Overall score 100 × (0.25, 0.20, 0.20, 0.15, 0.20 weights)          | Conflicts                                       | "No weighted scores" (CLAUDE.md); retired.                                                                                                                                                                                                                                                      |
 | §5.7         | Hard limits: slope, Sun at landing, Earth for direct contact        | Slope: **add as check**; Sun, Earth: in the app | A landing window already needs the Sun up (and the Earth, without a relay). The slope limit needs a sourced θ_max.                                                                                                                                                                              |
 | §5.7         | Tip-over ≈ atan(half leg span ÷ centre-of-mass height)              | **Mission value**, later                        | Centre-of-mass heights are not confirmed (the sheet says so).                                                                                                                                                                                                                                   |
 | §6.1         | Lander specifications                                               | **Mission values**, once sourced                | The app has demo missions only. Blue Ghost's ~400 W cites Firefly (a provider source: usable as the provider's statement). Nova-C's 10° maximum slope cites Wikipedia, which DATA_SOURCES does not allow as a primary source. Heights and widths cite Astronomy.com (journalism, context only). |

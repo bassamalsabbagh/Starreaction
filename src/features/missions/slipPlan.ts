@@ -6,8 +6,14 @@
  * number from the user's own text. Pure.
  */
 import type { DemoMission } from '../../data/demoData';
-import { SLIP_MONTHS, type SlipMonth, type SlipReading } from '../../services/slipReading';
+import {
+  SLIP_MONTHS,
+  type SlipMonth,
+  type SlipRangeDate,
+  type SlipReading,
+} from '../../services/slipReading';
 import { DAY_MS, TIME_MAX_MS, TIME_MIN_MS, formatClock } from '../../utils/time';
+import { addMonthsUtc, dateRangeError, type DateRange } from './dateRange';
 import {
   MISSION_NAME_MAX,
   MISSION_RANGES,
@@ -26,6 +32,8 @@ const NEED_FIELDS: readonly {
   { key: 'powerDays', field: 'daysNeeded' },
   { key: 'minEarthDeg', field: 'minEarthElevationDeg' },
 ];
+
+export { addMonthsUtc };
 
 const WORD_NUMBERS: Readonly<Record<string, number>> = {
   one: 1,
@@ -101,24 +109,6 @@ export function monthInText(month: SlipMonth, text: string, numbers: readonly nu
   return named || numbers.includes(index + 1);
 }
 
-/** Whole calendar months later (or earlier), the day kept or moved to the month's last day. */
-export function addMonthsUtc(ms: number, months: number): number {
-  const date = new Date(ms);
-  const total = date.getUTCFullYear() * 12 + date.getUTCMonth() + months;
-  const year = Math.floor(total / 12);
-  const month = total - year * 12;
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return Date.UTC(
-    year,
-    month,
-    Math.min(date.getUTCDate(), lastDay),
-    date.getUTCHours(),
-    date.getUTCMinutes(),
-    date.getUTCSeconds(),
-    date.getUTCMilliseconds(),
-  );
-}
-
 /** Which mission the text is about. */
 export type SlipMissionRead =
   | { readonly kind: 'selected'; readonly mission: DemoMission }
@@ -142,9 +132,18 @@ export interface SlipNeedLine {
   readonly changed: boolean;
 }
 
+/** The dates to check, read from "between 12 Dec and 25 Dec", and how they were worked out. */
+export interface SlipRange {
+  readonly range: DateRange;
+  /** "no year in your text, so the next December was used", or null. */
+  readonly how: string | null;
+}
+
 export interface SlipPlan {
   readonly mission: SlipMissionRead;
   readonly time: SlipTime | null;
+  /** The dates to check (docs/LANDER_RULES.md, "Date range and hours"), when the text gives them. */
+  readonly range: SlipRange | null;
   /** The form's values with what was read (an unknown mission: only what was read). */
   readonly draft: MissionDraft;
   readonly needs: readonly SlipNeedLine[];
@@ -275,8 +274,91 @@ function readTime(
 }
 
 /**
- * The app's reading of the assistant's reply: the mission, the new time, the needs (before and
- * after), and everything that was dropped or blocks Apply.
+ * The range from the reading ("between 12 Dec and 25 Dec"), checked like a date: each month must
+ * be in the text, and a day or a year only counts when it is. A missing year is the next one on or
+ * after the time bar's month (for the last date, on or after the first date's month); a missing
+ * day is the 1st for the first date and the month's last day for the last. A last date before the
+ * first, more than 12 months, or dates outside 1990–2100 are errors.
+ */
+function readRange(
+  reading: SlipReading,
+  text: string,
+  numbers: readonly number[],
+  time: number,
+  dropped: string[],
+  errors: string[],
+): SlipRange | null {
+  if (!reading.range) return null;
+  const ends: { date: SlipRangeDate; which: 'first' | 'last' }[] = [
+    { date: reading.range.from, which: 'first' },
+    { date: reading.range.to, which: 'last' },
+  ];
+  const checked: SlipRangeDate[] = [];
+  for (const { date, which } of ends) {
+    if (!monthInText(date.month, text, numbers)) {
+      dropped.push(`The range's ${which} month isn't in your text, so the range was not used.`);
+      return null;
+    }
+    let day = date.day;
+    let year = date.year;
+    if (day !== null && !inText(day, numbers)) {
+      dropped.push(
+        `The range's ${which} day isn't in your text, so ${which === 'first' ? 'the 1st' : 'the last day'} of the month was used.`,
+      );
+      day = null;
+    }
+    if (year !== null && !inText(year, numbers)) {
+      dropped.push(`The range's ${which} year isn't in your text, so the next one was used.`);
+      year = null;
+    }
+    checked.push({ day, month: date.month, year });
+  }
+  const [from, to] = checked;
+  if (!from || !to) return null;
+
+  const now = new Date(time);
+  const guessed: string[] = [];
+  /** The month's index (year × 12 + month): as typed, or the next one on or after `notBefore`. */
+  const monthOf = (date: SlipRangeDate, notBefore: number): number => {
+    const m = SLIP_MONTHS.indexOf(date.month);
+    if (date.year !== null) return date.year * 12 + m;
+    guessed.push(date.month);
+    const sameYear = Math.floor(notBefore / 12) * 12 + m;
+    return sameYear >= notBefore ? sameYear : sameYear + 12;
+  };
+  const fromMonth = monthOf(from, now.getUTCFullYear() * 12 + now.getUTCMonth());
+  const toMonth = monthOf(to, fromMonth);
+  const dayOf = (date: SlipRangeDate, month: number, fallback: 'first' | 'last'): number | null => {
+    const year = Math.floor(month / 12);
+    const m = month - year * 12;
+    const last = new Date(Date.UTC(year, m + 1, 0)).getUTCDate();
+    const day = date.day ?? (fallback === 'first' ? 1 : last);
+    if (day > last) {
+      errors.push(`There is no ${day} ${date.month} ${year}.`);
+      return null;
+    }
+    return Date.UTC(year, m, day);
+  };
+  const startMs = dayOf(from, fromMonth, 'first');
+  const stopMs = dayOf(to, toMonth, 'last');
+  if (startMs === null || stopMs === null) return null;
+  const range = { startMs, stopMs };
+  const problem = dateRangeError(range);
+  if (problem) {
+    errors.push(problem);
+    return null;
+  }
+  const months = [...new Set(guessed)];
+  const how =
+    months.length > 0
+      ? `no year in your text, so the next ${months.join(' and ')} ${months.length === 1 ? 'was' : 'were'} used`
+      : null;
+  return { range, how };
+}
+
+/**
+ * The app's reading of the assistant's reply: the mission, the new time or dates, the needs
+ * (before and after), and everything that was dropped or blocks Apply.
  */
 export function planSlip(reading: SlipReading, context: SlipContext): SlipPlan {
   const { text, missions, selected, time } = context;
@@ -365,7 +447,15 @@ export function planSlip(reading: SlipReading, context: SlipContext): SlipPlan {
   });
   const changed = needs.some((line) => line.changed);
 
-  const slipTime = readTime(reading, text, numbers, time, dropped, errors);
+  let slipTime = readTime(reading, text, numbers, time, dropped, errors);
+  let slipRange = readRange(reading, text, numbers, time, dropped, errors);
+  if (slipTime && slipRange) {
+    errors.push(
+      'Your text gives both a range of dates and a new date or shift. Pick one, or set them by hand.',
+    );
+    slipTime = null;
+    slipRange = null;
+  }
 
   const unclear = reading.unclear.filter((quote) => appearsIn(quote, text));
   const unclearHidden = reading.unclear.length - unclear.length;
@@ -373,17 +463,21 @@ export function planSlip(reading: SlipReading, context: SlipContext): SlipPlan {
     reading.missionName !== null ||
     reading.shift !== null ||
     reading.date !== null ||
+    reading.range !== null ||
     reading.relay !== null ||
     NEED_FIELDS.some(({ key }) => reading[key] !== null);
   const empty = !read && reading.unclear.length === 0;
 
   const switches = mission.kind === 'known' && mission.mission.id !== selected.id;
   const canApply =
-    mission.kind !== 'unknown' && errors.length === 0 && (slipTime !== null || changed || switches);
+    mission.kind !== 'unknown' &&
+    errors.length === 0 &&
+    (slipTime !== null || slipRange !== null || changed || switches);
 
   return {
     mission,
     time: slipTime,
+    range: slipRange,
     draft,
     needs,
     changed,

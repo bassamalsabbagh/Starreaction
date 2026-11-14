@@ -3,6 +3,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import {
   ArcType,
   BillboardCollection,
+  BoundingSphere,
   CallbackProperty,
   CameraEventType,
   ColorMaterialProperty,
@@ -20,6 +21,7 @@ import {
   Entity,
   GeographicTilingScheme,
   GeometryInstance,
+  HeadingPitchRange,
   ImageryLayer,
   Ion,
   JulianDate,
@@ -35,6 +37,8 @@ import {
   SceneTransforms,
   ScreenSpaceEventType,
   SingleTileImageryProvider,
+  TextureMagnificationFilter,
+  TextureMinificationFilter,
   VerticalOrigin,
   WebMapTileServiceImageryProvider,
 } from 'cesium';
@@ -46,8 +50,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react';
-import { formatDays, type RankedDemoSite } from '../../data/demoData';
-import { layerPixels, type ElevationGrid, type ElevationLayer } from '../../utils/elevationGrid';
+import { formatDays, type RankedSite } from '../../data/demoData';
 import {
   MIN_HEIGHT_M,
   MOON_RADIUS_M,
@@ -62,6 +65,8 @@ import {
   isWholeView,
   offsetLonLat,
   southPoleView,
+  POLE_TILT_DEG,
+  type PoleMode,
   viewShift,
   wheelDeltaPx,
   wheelTargetHeight,
@@ -73,6 +78,20 @@ import {
 } from './cameraControls';
 import { PREVIEW_FAILURE_THRESHOLD, PREVIEW_IMAGERY, type ImageryStatus } from './mapLabels';
 import { MapControls } from './MapControls';
+import { SHADE_EVERYWHERE, type LayerDisplay, type LayerImageSpec } from './mapLayerState';
+import {
+  controllerLayers,
+  createVisibilityController,
+  type VisibilityHandle,
+} from './visibilityController';
+import {
+  VISIBILITY_MANIFEST_URL,
+  applyVisibilityDisplay,
+  createFrameRequester,
+  raiseOverlayToTop,
+  type VisibilityDisplay,
+  type VisibilityRuntime,
+} from './visibilityLayer';
 import {
   AMBIENT,
   COLOUR_FADE_MS,
@@ -87,12 +106,8 @@ import {
   TREK_FADE_START_M,
   TREK_FULL_M,
   fadeByHeight,
-  formatAltitude,
   makeStars,
-  metresPerPixel,
-  zoomPercent,
 } from './moonLook';
-import { ZoomReadout, type ReadoutValues } from './ZoomReadout';
 import {
   BEACON_SCALE,
   BEACON_SIZE_PX,
@@ -121,7 +136,14 @@ Ellipsoid.default = Ellipsoid.MOON;
 Ion.defaultAccessToken = '';
 
 const SITE_ENTITY_PREFIX = 'site:';
+const NO_LAYERS: readonly LayerDisplay[] = [];
 const NO_IDS: readonly string[] = [];
+const NO_VISIBILITY: VisibilityDisplay = {
+  load: false,
+  frame: null,
+  sun: { visible: false, opacity: 0 },
+  earth: { visible: false, opacity: 0 },
+};
 const MARKER_HEIGHT_M = 200;
 /** Grid lines: lifted above the surface and cut finely enough that a segment sags < 1 m. */
 const GRID_HEIGHT_M = 20;
@@ -151,7 +173,6 @@ const STAGE_SHRINK_MS = 400;
 const DRIFT_IDLE_MS = 5_000;
 const DRIFT_MIN_HEIGHT_M = MOON_RADIUS_M * 1.5;
 const DRIFT_RADIANS_PER_SECOND = CesiumMath.toRadians(0.6);
-const READOUT_INTERVAL_MS = 100;
 /** Median frame gap while moving above which the map trades sharpness for frame rate (~50 fps). */
 const SLOW_FRAME_MS = 20;
 /** Radians of tilt allowed before the camera is turned back to straight down. */
@@ -181,7 +202,7 @@ interface GlideState {
 }
 
 interface MoonGlobeProps {
-  rankedSites: readonly RankedDemoSite[];
+  rankedSites: readonly RankedSite[];
   selectedSiteId: string | null;
   /** A site highlighted from outside the map (a hovered list row); its beacon grows. */
   hoveredSiteId: string | null;
@@ -195,11 +216,33 @@ interface MoonGlobeProps {
   onPickPoint?: (point: { lat: number; lon: number }) => void;
   showGrid: boolean;
   onShowGridChange: (show: boolean) => void;
-  /** The south-pole elevation or slope layer to draw, with its grid; null draws none. */
-  elevationLayer?: { layer: ElevationLayer; grid: ElevationGrid } | null;
-  /** Whether an elevation file is loaded (the layer buttons stay off without one). */
-  elevationAvailable?: boolean;
-  onElevationLayerChange?: (layer: ElevationLayer | null) => void;
+  /**
+   * The map layers (elevation, slope) to draw, lowest first, each with its images and opacity. A
+   * layer loads nothing until it is first visible; it never changes with the time.
+   */
+  mapLayers?: readonly LayerDisplay[];
+  /** Opens or closes the map layers panel (the icon column's button). */
+  onToggleLayers?: () => void;
+  layersOpen?: boolean;
+  /**
+   * The ground point under the pointer (degrees), about ten times a second, or null off the Moon:
+   * the layers' readout. Without it, nothing is picked for it.
+   */
+  onHoverGround?: (point: { lat: number; lon: number } | null) => void;
+  /**
+   * Where the Sun-and-relief shading stops (unshadedBelowZ in mapLayerState): south of the layers'
+   * coverage while one is visible, so they keep their true colours whatever the time.
+   */
+  layerShadeCutZ?: number;
+  /** Some of a layer's images could not be loaded (the panel says so). */
+  onLayerImagesFailed?: (layerId: string) => void;
+  /**
+   * The visibility prototype layer (Sun and Earth, one frame per 10 minutes): loads nothing until
+   * `load`; the frame is the app's time snapped to a supplied one, or null (nothing requested).
+   */
+  visibility?: VisibilityDisplay;
+  /** What the visibility layer did: manifest loaded or not, frame applied, loading, failure. */
+  onVisibilityState?: (patch: Partial<VisibilityRuntime>) => void;
   imageryStatus: ImageryStatus;
   onImageryStatusChange: (status: ImageryStatus) => void;
   /** How much of each map edge the chrome covers (sidebars, status strip, time bar), in px. */
@@ -226,6 +269,8 @@ interface MoonGlobeProps {
    * flown to close up lands in the middle of what is left, not under the panel.
    */
   getCoveredLeft?: () => number;
+  /** How the beacons' hover text names the mission: "this DEMO mission", or "this mission". */
+  missionWords?: string;
 }
 
 interface HoverTip {
@@ -234,11 +279,15 @@ interface HoverTip {
   y: number;
 }
 
-function hoverText({ site, assessment, rank }: RankedDemoSite, compared = false): string {
+function hoverText(
+  { site, assessment, rank }: RankedSite,
+  compared = false,
+  missionWords = 'this mission',
+): string {
   const tag = compared ? ' · In compare' : '';
   if (rank === null) {
     const reason = assessment.failTitles[0];
-    return `${site.name} · Not suitable for this mission${reason ? `: ${reason}` : ''}${tag}`;
+    return `${site.name} · Not suitable for ${missionWords}${reason ? `: ${reason}` : ''}${tag}`;
   }
   return `#${rank} ${site.name} · window ${formatDays(assessment.usableDays)}${tag}`;
 }
@@ -273,9 +322,14 @@ export function MoonGlobe({
   onPickPoint,
   showGrid,
   onShowGridChange,
-  elevationLayer = null,
-  elevationAvailable = false,
-  onElevationLayerChange,
+  mapLayers = NO_LAYERS,
+  onToggleLayers,
+  layersOpen = false,
+  onHoverGround,
+  layerShadeCutZ = SHADE_EVERYWHERE,
+  onLayerImagesFailed,
+  visibility = NO_VISIBILITY,
+  onVisibilityState,
   imageryStatus,
   onImageryStatusChange,
   viewInsets,
@@ -287,6 +341,7 @@ export function MoonGlobe({
   onPresent,
   getCoveredLeft,
   idleDrift = true,
+  missionWords = 'this mission',
 }: MoonGlobeProps) {
   const coveredLeftRef = useRef(getCoveredLeft);
   useEffect(() => {
@@ -325,10 +380,17 @@ export function MoonGlobe({
   const wholeHeightRef = useRef(MOON_RADIUS_M * 3);
   /** Re-measures the whole-Moon view after a layout change. Set up with the scene. */
   const refitRef = useRef<() => void>(() => undefined);
+  /** Frames the opening Top view again (until the camera has been moved). Set up with the scene. */
+  const applyTopRef = useRef<() => void>(() => undefined);
+  /** Top view settings on (no constrained axis, no tilt or look) or off (the previous ones). */
+  const setTopControlsRef = useRef<(top: boolean) => void>(() => undefined);
   /** Flies back to the whole-Moon view. Set up with the scene. */
   const flyWholeRef = useRef<() => void>(() => undefined);
   /** The tilted south-pole view (southPoleView), and leaving it. Set up with the scene. */
-  const flySouthPoleRef = useRef<() => void>(() => undefined);
+  const flySouthPoleRef = useRef<(mode: PoleMode) => void>(() => undefined);
+  // Whether the 3D (tilted) view is up, for flights that keep it.
+  const isTiltedRef = useRef<() => boolean>(() => false);
+  const [poleMode, setPoleMode] = useState<PoleMode>('top');
   const leaveTiltRef = useRef<() => void>(() => undefined);
   /** Points the Sun light, the Sun's glow and the Earth for a time. Set up with the scene. */
   const timeRef = useRef(time);
@@ -345,6 +407,19 @@ export function MoonGlobe({
   const glideToRef = useRef<(height: number, anchor: LonLat | null) => void>(() => undefined);
   const glideRef = useRef<GlideState>({ target: 0, anchor: null, frameId: 0, last: 0 });
   const onHoverRef = useRef(onHoverSite);
+  const onHoverGroundRef = useRef(onHoverGround);
+  const onLayerFailedRef = useRef(onLayerImagesFailed);
+  /** The map layers' imagery, by layer id, and the latest description of them. */
+  const layerImageryRef = useRef(
+    new Map<string, { preview: ImageryLayer[]; full: ImageryLayer[]; failed: boolean }>(),
+  );
+  const mapLayersRef = useRef(mapLayers);
+  /** The visibility layer: its latest description, its controller once made, and its teardown. */
+  const visibilityRef = useRef(visibility);
+  const onVisibilityStateRef = useRef(onVisibilityState);
+  const visibilityHandleRef = useRef<VisibilityHandle | null>(null);
+  const visibilityStartedRef = useRef(false);
+  const disposeVisibilityRef = useRef<() => void>(() => undefined);
   /** Each beacon's animated scale and fade-in. */
   const beaconAnimRef = useRef(new Map<string, BeaconAnim>());
   /** The beacon under the pointer, and the one highlighted from the list. */
@@ -359,7 +434,6 @@ export function MoonGlobe({
   /** Marks a user action: stops the idle drift and the intro. Set up with the scene. */
   const interactRef = useRef<() => void>(() => undefined);
   const [hoverTip, setHoverTip] = useState<HoverTip | null>(null);
-  const [readout, setReadout] = useState<ReadoutValues | null>(null);
 
   useEffect(() => {
     onSelectRef.current = onSelectSite;
@@ -367,6 +441,9 @@ export function MoonGlobe({
     statusRef.current = imageryStatus;
     onStatusRef.current = onImageryStatusChange;
     onHoverRef.current = onHoverSite;
+    onHoverGroundRef.current = onHoverGround;
+    onLayerFailedRef.current = onLayerImagesFailed;
+    onVisibilityStateRef.current = onVisibilityState;
     sitesRef.current = rankedSites;
   });
 
@@ -495,6 +572,7 @@ export function MoonGlobe({
           normalFar: MOON_IMAGES.normalLow,
           ambient: AMBIENT,
           rimDarkening: RIM_DARKENING,
+          unshadedBelowZ: SHADE_EVERYWHERE,
         },
         source: MOON_RELIEF_SHADER,
       },
@@ -656,6 +734,7 @@ export function MoonGlobe({
     // demo's restore leaves it first (leaveTilt): straight down over the spot in the middle of the
     // view, keeping the screen's up direction, so the rest of the map never has to handle a tilt.
     let tiltedView = false;
+    isTiltedRef.current = () => tiltedView;
     const leaveTilt = () => {
       if (!tiltedView) return;
       tiltedView = false;
@@ -699,27 +778,97 @@ export function MoonGlobe({
     // Zooming towards the cursor can leave a slight tilt; turn it back to straight down every
     // frame, so the close view always reads as a flat map. The correction is tiny per frame, so it
     // never shows as a jump.
+    // Straight down over a place, keeping the screen's "up" as it is. Not by heading: near the pole
+    // "north" turns with every small move in longitude, so a heading kept while the camera moves
+    // spins the picture (the Top view rotated on every wheel zoom).
+    const setNadir = (destination: Cartesian3) => {
+      const direction = Cartesian3.negate(
+        Cartesian3.normalize(destination, new Cartesian3()),
+        new Cartesian3(),
+      );
+      const level = (vector: Cartesian3) =>
+        Cartesian3.subtract(
+          vector,
+          Cartesian3.multiplyByScalar(
+            direction,
+            Cartesian3.dot(vector, direction),
+            new Cartesian3(),
+          ),
+          new Cartesian3(),
+        );
+      let up = level(camera.up);
+      if (Cartesian3.magnitude(up) < 1e-6) up = level(camera.direction);
+      camera.setView({
+        destination,
+        orientation: { direction, up: Cartesian3.normalize(up, up) },
+      });
+    };
+    // The Top view needs a camera with no constrained axis (the default, the Moon's pole axis, is
+    // degenerate looking straight down at the pole) and no tilt or look; the 3D and globe views get
+    // the previous settings back.
+    const defaultAxis = camera.constrainedAxis
+      ? Cartesian3.clone(camera.constrainedAxis)
+      : undefined;
+    const controller = scene.screenSpaceCameraController;
+    const previousControls = { tilt: controller.enableTilt, look: controller.enableLook };
+    const setTopControls = (top: boolean) => {
+      camera.constrainedAxis = top ? undefined : defaultAxis;
+      controller.enableTilt = top ? false : previousControls.tilt;
+      controller.enableLook = top ? false : previousControls.look;
+    };
+    setTopControlsRef.current = setTopControls;
+    setTopControls(true);
     const removeNadirLock = scene.preRender.addEventListener(() => {
       if (tiltedView) return;
       if (
         Math.abs(camera.pitch - NADIR) > NADIR_TOLERANCE ||
         Math.abs(camera.roll) > NADIR_TOLERANCE
       ) {
-        camera.setView({ orientation: { heading: camera.heading, pitch: NADIR, roll: 0 } });
+        setNadir(Cartesian3.clone(camera.positionWC));
       }
     });
 
-    // Opening: ease in to the whole-Moon view (decorative; under reduced motion, start in place).
+    // The opening Top view stays until the user moves the camera: once the layout is measured (the
+    // panel beside the map), `applyTopRef` frames it again in the room that is really there.
+    let touched = false;
+    applyTopRef.current = () => {
+      if (touched || widget.isDestroyed()) return;
+      const pose = southPoleView(
+        focalLengthPx(frame.clientWidth, frame.clientHeight),
+        frame.clientWidth,
+        frame.clientHeight,
+        insetsRef.current ?? NO_INSETS,
+        POLE_TILT_DEG.top,
+      );
+      camera.cancelFlight();
+      camera.setView({
+        destination: Cartesian3.fromRadians(pose.lon, pose.lat, pose.height),
+        orientation: { heading: pose.heading, pitch: pose.pitch, roll: 0 },
+      });
+      scene.requestRender();
+    };
+    // Opening: straight down over the south pole, 80-90° S filling the view (Top). Eases in
+    // (decorative; under reduced motion, starts in place).
     let introRunning = !reducedMotion;
-    const whole = wholeHeightRef.current;
+    const topPose = southPoleView(
+      focalLengthPx(frame.clientWidth, frame.clientHeight),
+      frame.clientWidth,
+      frame.clientHeight,
+      insetsRef.current ?? NO_INSETS,
+      POLE_TILT_DEG.top,
+    );
     camera.setView({
-      destination: Cartesian3.fromDegrees(0, 0, reducedMotion ? whole : whole * INTRO_START_FACTOR),
-      orientation: { heading: 0, pitch: NADIR, roll: 0 },
+      destination: Cartesian3.fromRadians(
+        topPose.lon,
+        topPose.lat,
+        reducedMotion ? topPose.height : topPose.height * INTRO_START_FACTOR,
+      ),
+      orientation: { heading: topPose.heading, pitch: topPose.pitch, roll: 0 },
     });
     if (introRunning) {
       camera.flyTo({
-        destination: Cartesian3.fromDegrees(0, 0, whole),
-        orientation: { heading: 0, pitch: NADIR, roll: 0 },
+        destination: Cartesian3.fromRadians(topPose.lon, topPose.lat, topPose.height),
+        orientation: { heading: topPose.heading, pitch: topPose.pitch, roll: 0 },
         duration: INTRO_SECONDS,
         easingFunction: EasingFunction.CUBIC_OUT,
         complete: () => {
@@ -762,6 +911,7 @@ export function MoonGlobe({
       driftId = requestAnimationFrame(drift);
     }, 250);
     const interact = () => {
+      touched = true;
       lastTouch = performance.now();
       stopDrift();
       if (introRunning) camera.cancelFlight();
@@ -769,34 +919,6 @@ export function MoonGlobe({
     interactRef.current = interact;
     frame.addEventListener('pointerdown', interact);
     frame.addEventListener('keydown', interact);
-
-    // Readout: about 10 updates a second; React only re-renders when the text changes.
-    const readoutTimer = window.setInterval(() => {
-      const height = camera.positionCartographic.height;
-      const frustum = camera.frustum as { fov?: number };
-      const mpp = metresPerPixel(
-        height,
-        frustum.fov ?? CesiumMath.PI_OVER_THREE,
-        scene.canvas.clientWidth,
-        scene.canvas.clientHeight,
-      );
-      // Across the visible map: the frame less what the sidebars and panels cover.
-      const insets = insetsRef.current ?? NO_INSETS;
-      const visibleWidth = Math.max(0, frame.clientWidth - insets.left - insets.right);
-      const next: ReadoutValues = {
-        altitude: formatAltitude(height),
-        zoom: `${zoomPercent(height, wholeHeightRef.current)}%`,
-        distance: formatAltitude(mpp * visibleWidth),
-      };
-      setReadout((previous) =>
-        previous &&
-        previous.altitude === next.altitude &&
-        previous.zoom === next.zoom &&
-        previous.distance === next.distance
-          ? previous
-          : next,
-      );
-    }, READOUT_INTERVAL_MS);
 
     // Wheel zoom with a glide. One loop runs while a glide is under way; each new wheel event
     // just moves its target, so the glide follows the input without stepping.
@@ -809,10 +931,7 @@ export function MoonGlobe({
       const centre = glide.anchor
         ? zoomCentre({ lon: here.longitude, lat: here.latitude }, glide.anchor, here.height, next)
         : { lon: here.longitude, lat: here.latitude };
-      camera.setView({
-        destination: Cartesian3.fromRadians(centre.lon, centre.lat, next),
-        orientation: { heading: camera.heading, pitch: NADIR, roll: 0 },
-      });
+      setNadir(Cartesian3.fromRadians(centre.lon, centre.lat, next));
       scene.requestRender();
       if (next === glide.target) {
         glide.frameId = 0;
@@ -822,6 +941,7 @@ export function MoonGlobe({
       }
     };
     const glideTo = (height: number, anchor: LonLat | null) => {
+      touched = true;
       leaveTilt();
       camera.cancelFlight();
       glide.target = Math.min(wholeHeightRef.current, Math.max(MIN_HEIGHT_M, height));
@@ -834,6 +954,7 @@ export function MoonGlobe({
     // so it runs the same under reduced motion.
     let flyingWhole = false;
     const flyWhole = () => {
+      setTopControlsRef.current(false);
       leaveTilt();
       stopGlide(glide);
       const target = wholeHeightRef.current;
@@ -855,22 +976,30 @@ export function MoonGlobe({
     };
     flyWholeRef.current = flyWhole;
 
-    // "South pole": the tilted view over the pole (cameraControls southPoleView), fitted to the
-    // visible area. Navigation, so it runs the same under reduced motion.
-    const flySouthPole = () => {
+    // Top and 3D: the view over the pole (cameraControls southPoleView), straight down or tilted
+    // 45°, fitted to the visible area, in a smooth flight. Navigation, so it runs the same under
+    // reduced motion. The straight-down lock rests during the flight and comes back for Top.
+    const flySouthPole = (mode: PoleMode) => {
       stopGlide(glide);
+      setTopControlsRef.current(mode === 'top');
       const insets = insetsRef.current ?? NO_INSETS;
       const pose = southPoleView(
         focalLengthPx(frame.clientWidth, frame.clientHeight),
         frame.clientWidth,
         frame.clientHeight,
         insets,
+        POLE_TILT_DEG[mode],
       );
+      const settle = () => {
+        if (mode === 'top') tiltedView = false;
+      };
       camera.flyTo({
         destination: Cartesian3.fromRadians(pose.lon, pose.lat, pose.height),
         orientation: { heading: pose.heading, pitch: pose.pitch, roll: 0 },
         duration: FLY_SECONDS,
         easingFunction: EasingFunction.QUADRATIC_IN_OUT,
+        complete: settle,
+        cancel: settle,
       });
       // After flyTo, which cancels (and so clears) any flight already under way.
       tiltedView = true;
@@ -884,9 +1013,9 @@ export function MoonGlobe({
           interactRef.current();
           flyWhole();
         },
-        showSouthPole: () => {
+        showSouthPole: (mode: PoleMode = '3d') => {
           interactRef.current();
-          flySouthPole();
+          flySouthPole(mode);
         },
         saveView: (): SavedView => ({
           destination: Cartesian3.clone(camera.positionWC),
@@ -994,6 +1123,33 @@ export function MoonGlobe({
     let pointerHeld = false;
     let hoverPoint: Cartesian2 | null = null;
     let pickFrameId = 0;
+    let lastGroundAt = 0;
+    let groundTimer = 0;
+    let touchInput = false;
+    // The map layers' readout: the ground point under the pointer, about ten times a second (the
+    // last move is always sent, after the pause).
+    const reportGround = () => {
+      groundTimer = 0;
+      const report = onHoverGroundRef.current;
+      if (!report || touchInput) return;
+      lastGroundAt = performance.now();
+      const ground =
+        hoverPoint && !pointerHeld ? camera.pickEllipsoid(hoverPoint, Ellipsoid.MOON) : undefined;
+      if (!ground) {
+        report(null);
+        return;
+      }
+      const spot = Ellipsoid.MOON.cartesianToCartographic(ground);
+      report({
+        lat: CesiumMath.toDegrees(spot.latitude),
+        lon: CesiumMath.toDegrees(spot.longitude),
+      });
+    };
+    const requestGround = () => {
+      if (!onHoverGroundRef.current || groundTimer !== 0) return;
+      const wait = Math.max(0, 100 - (performance.now() - lastGroundAt));
+      groundTimer = window.setTimeout(reportGround, wait);
+    };
     const updateHover = () => {
       pickFrameId = 0;
       const siteId = hoverPoint && !pointerHeld ? siteIdAt(hoverPoint) : null;
@@ -1020,10 +1176,12 @@ export function MoonGlobe({
     widget.screenSpaceEventHandler.setInputAction((event: { endPosition: Cartesian2 }) => {
       hoverPoint = Cartesian2.clone(event.endPosition, hoverPoint ?? undefined);
       requestHover();
+      requestGround();
     }, ScreenSpaceEventType.MOUSE_MOVE);
     // While the Moon is dragged, nothing decorative moves: the frame is marked, and CSS stops the
     // selection pulse until the pointer lets go.
-    const holdPointer = () => {
+    const holdPointer = (event: PointerEvent) => {
+      touchInput = event.pointerType === 'touch';
       pointerHeld = true;
       if (frameRef.current) frameRef.current.dataset.dragging = 'true';
       requestHover();
@@ -1136,13 +1294,13 @@ export function MoonGlobe({
       removePointFollow();
       cancelAnimationFrame(colourFadeId);
       cancelAnimationFrame(pickFrameId);
+      window.clearTimeout(groundTimer);
       removeFrameWatch();
       container.removeEventListener('pointerdown', holdPointer);
       window.removeEventListener('pointerup', releasePointer);
       window.removeEventListener('pointercancel', releasePointer);
       stopDrift();
       window.clearInterval(idleCheck);
-      window.clearInterval(readoutTimer);
       removeMoveStart();
       removeMoveEnd();
       cameraApiRef.current = null;
@@ -1154,6 +1312,10 @@ export function MoonGlobe({
       removeProgressListener();
       removeTrekFade();
       removeNadirLock();
+      // The visibility controller removes its own imagery layers, so it goes before the widget.
+      disposeVisibilityRef.current();
+      disposeVisibilityRef.current = () => undefined;
+      visibilityStartedRef.current = false;
       widget.destroy();
       widgetRef.current = null;
     };
@@ -1191,14 +1353,15 @@ export function MoonGlobe({
     };
   }, [showGrid]);
 
-  // Site beacons: suitable in off-white with the rank inside, not suitable as a small grey dot.
+  // Site beacons: suitable in green with the rank inside, not suitable as a small red dot (the
+  // Sites list's verdict for the dates checked; the Timeline's bracket moves them live).
   // One entity per site for the map's life: a mission change swaps its image and name, and a
   // changed beacon fades back in.
   useEffect(() => {
     const widget = widgetRef.current;
     if (!widget) return;
     const ink = cssToken('--color-pin-text', '#061022');
-    const suitableFill = cssToken('--color-marker', '#d8d5ce');
+    const suitableFill = cssToken('--color-pin-pass', '#5fd49a');
     const anims = beaconAnimRef.current;
     const { camera } = widget;
     const badge = cssToken('--color-accent', '#ffb347');
@@ -1207,14 +1370,21 @@ export function MoonGlobe({
       const compared = comparedSiteIds.includes(site.id);
       const style: BeaconStyle = {
         compareBadge: compared ? badge : undefined,
-        fill: entry.rank === null ? cssToken('--color-pin-excluded', '#8a91a0') : suitableFill,
+        fill: entry.rank === null ? cssToken('--color-pin-fail', '#ff7b72') : suitableFill,
         ink,
       };
       const image = beaconSvgDataUri(style, entry.rank);
       const id = `${SITE_ENTITY_PREFIX}${site.id}`;
       const existing = widget.entities.getById(id);
       if (existing) {
-        if (updateBeacon(existing, image, hoverText(entry, compared), widget.clock.currentTime)) {
+        if (
+          updateBeacon(
+            existing,
+            image,
+            hoverText(entry, compared, missionWords),
+            widget.clock.currentTime,
+          )
+        ) {
           const anim = anims.get(site.id);
           if (anim) anim.appear = 0;
         }
@@ -1223,7 +1393,7 @@ export function MoonGlobe({
       const position = Cartesian3.fromDegrees(site.lon, site.lat, MARKER_HEIGHT_M);
       widget.entities.add({
         id,
-        name: hoverText(entry, compared),
+        name: hoverText(entry, compared, missionWords),
         position,
         billboard: {
           image,
@@ -1256,7 +1426,7 @@ export function MoonGlobe({
       });
     }
     animateBeaconsRef.current();
-  }, [rankedSites, comparedSiteIds]);
+  }, [rankedSites, comparedSiteIds, missionWords]);
 
   useEffect(() => {
     pickedRef.current = pickedPoint;
@@ -1291,8 +1461,21 @@ export function MoonGlobe({
     const place = flyRequest.point ?? entry?.site;
     if (!place) return;
     interactRef.current();
-    leaveTiltRef.current();
     stopGlide(glideRef.current);
+    if (isTiltedRef.current() && place.lat < -80) {
+      const { camera } = widget;
+      const range = camera.positionCartographic.height / Math.max(0.2, Math.sin(-camera.pitch));
+      camera.flyToBoundingSphere(
+        new BoundingSphere(Cartesian3.fromDegrees(place.lon, place.lat, 0, Ellipsoid.MOON), 1),
+        {
+          offset: new HeadingPitchRange(camera.heading, camera.pitch, range),
+          duration: FLY_SECONDS,
+          easingFunction: EasingFunction.QUADRATIC_IN_OUT,
+        },
+      );
+      return;
+    }
+    leaveTiltRef.current();
     const here = widget.camera.positionCartographic;
     // Close up, aim beside an open left panel: the site lands in the middle of the uncovered map.
     // Zoomed out the Moon stays centred (the panel never covers the middle of the disc).
@@ -1324,39 +1507,168 @@ export function MoonGlobe({
     );
   }, [flyRequest]);
 
-  // The elevation or slope layer: the grid redrawn once on a longitude-latitude image covering the
-  // pole out to its edge (elevationGrid.layerPixels), as one image layer over the surface.
+  // The map layers (docs/LANDER_RULES.md, "Map layers: elevation and slope"): for each visible
+  // layer, its preview quarters first, then the full quarters and the 40 m patches, which replace the
+  // previews once all have loaded. Nothing loads until a layer is first switched on; switching it
+  // off hides its images. The first layer in the list is drawn lowest (elevation under slope), all
+  // above the basemap. The images never change with the time.
   useEffect(() => {
+    mapLayersRef.current = mapLayers;
     const widget = widgetRef.current;
-    if (!widget || !elevationLayer) return undefined;
-    const { grid, layer } = elevationLayer;
-    const width = 2048;
-    const height = 256;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) return undefined;
-    context.putImageData(
-      new ImageData(layerPixels(grid, layer, width, height), width, height),
-      0,
-      0,
-    );
-    const imagery = widget.imageryLayers.addImageryProvider(
-      new SingleTileImageryProvider({
-        url: canvas.toDataURL('image/png'),
-        rectangle: Rectangle.fromDegrees(-180, -90, 180, grid.manifest.maxLatDeg),
-        tileWidth: width,
-        tileHeight: height,
-        ellipsoid: Ellipsoid.MOON,
-      }),
-    );
-    widget.scene.requestRender();
-    return () => {
-      widget.imageryLayers.remove(imagery, true);
+    if (!widget) return;
+    const layers = widget.imageryLayers;
+    const states = layerImageryRef.current;
+    const apply = () => {
+      for (const display of mapLayersRef.current) {
+        const state = states.get(display.id);
+        if (!state) continue;
+        for (const imagery of [...state.preview, ...state.full]) {
+          imagery.show = display.visible;
+          imagery.alpha = display.opacity;
+          if (layers.contains(imagery)) layers.raiseToTop(imagery);
+        }
+      }
+      // The visibility overlay stays above elevation and slope.
+      raiseVisibility(widget, visibilityHandleRef.current);
       widget.scene.requestRender();
     };
-  }, [elevationLayer]);
+    // Each image as its own imagery layer, drawn pixel for pixel (no blending of the team's
+    // colours). Images that fail are left out; the rest are kept.
+    const load = async (images: readonly LayerImageSpec[]) => {
+      const results = await Promise.allSettled(
+        images.map(async (image) => {
+          const provider = await SingleTileImageryProvider.fromUrl(image.url, {
+            rectangle: Rectangle.fromDegrees(image.west, image.south, image.east, image.north),
+            ellipsoid: Ellipsoid.MOON,
+          });
+          return new ImageryLayer(provider, {
+            magnificationFilter: TextureMagnificationFilter.NEAREST,
+            minificationFilter: TextureMinificationFilter.NEAREST,
+          });
+        }),
+      );
+      const loaded = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      );
+      return { loaded, failed: loaded.length < images.length };
+    };
+    for (const display of mapLayers) {
+      const existing = states.get(display.id);
+      if (!display.visible) {
+        // A layer whose images partly failed is cleared when switched off, so switching it on
+        // again loads it afresh.
+        if (existing?.failed) {
+          for (const imagery of [...existing.preview, ...existing.full]) {
+            layers.remove(imagery, true);
+          }
+          states.delete(display.id);
+        }
+        continue;
+      }
+      if (existing) continue;
+      const state = {
+        preview: [] as ImageryLayer[],
+        full: [] as ImageryLayer[],
+        failed: false,
+      };
+      states.set(display.id, state);
+      void (async () => {
+        const preview = await load(display.preview);
+        if (widget.isDestroyed()) return;
+        for (const imagery of preview.loaded) layers.add(imagery);
+        state.preview = preview.loaded;
+        apply();
+        // A narrow or low-memory device keeps the previews only.
+        const full = display.full.length > 0 ? await load(display.full) : null;
+        if (widget.isDestroyed()) return;
+        if (full) {
+          for (const imagery of full.loaded) layers.add(imagery);
+          state.full = full.loaded;
+          // The previews go once every full image is in; otherwise they fill the gaps.
+          if (!full.failed) {
+            for (const imagery of state.preview) layers.remove(imagery, true);
+            state.preview = [];
+          }
+        }
+        const failed = preview.failed || (full?.failed ?? false);
+        state.failed = failed;
+        const stillOn = mapLayersRef.current.some(
+          (entry) => entry.id === display.id && entry.visible,
+        );
+        if (failed && !stillOn) {
+          // Switched off while loading: clear it now, so switching it on again retries.
+          for (const imagery of [...state.preview, ...state.full]) layers.remove(imagery, true);
+          state.preview = [];
+          state.full = [];
+        }
+        if (state.preview.length === 0 && state.full.length === 0) {
+          // Nothing loaded: forget the layer, so switching it on again tries again.
+          states.delete(display.id);
+        }
+        if (failed) onLayerFailedRef.current?.(display.id);
+        apply();
+      })();
+    }
+    apply();
+  }, [mapLayers]);
+
+  // The visibility prototype (docs/LANDER_RULES.md, "Visibility prototype layer"): one controller,
+  // made the first time the layer is switched on; then the switches, opacities and the frame for
+  // the app's time go to it. A manifest that cannot be read leaves the layer unavailable and the
+  // globe as it was. Its imagery and numbers change together, when the controller has both.
+  useEffect(() => {
+    visibilityRef.current = visibility;
+    const widget = widgetRef.current;
+    if (!widget || widget.isDestroyed()) return;
+    const handle = visibilityHandleRef.current;
+    if (handle) {
+      applyVisibilityDisplay(handle.controller, handle.requester, visibility);
+      return;
+    }
+    if (!visibility.load || visibilityStartedRef.current) return;
+    visibilityStartedRef.current = true;
+    const report = (patch: Partial<VisibilityRuntime>) => onVisibilityStateRef.current?.(patch);
+    report({ status: 'loading' });
+    // A frame's new layers go on top of whatever is there; the order is put back each time.
+    createVisibilityController(widget, VISIBILITY_MANIFEST_URL, (timeUTC) => {
+      raiseVisibility(widget, visibilityHandleRef.current);
+      widget.scene.requestRender();
+      report({ appliedTime: timeUTC });
+    }).then(
+      (controller) => {
+        // The globe went while the manifest loaded: the controller has no layers yet to remove.
+        if (widget.isDestroyed()) return;
+        const requester = createFrameRequester(
+          (stamp) => controller.setTime(stamp),
+          ({ loading, failed }) => report({ loading, failed }),
+        );
+        const next: VisibilityHandle = { controller, requester };
+        visibilityHandleRef.current = next;
+        disposeVisibilityRef.current = () => {
+          requester.stop();
+          controller.dispose();
+          visibilityHandleRef.current = null;
+        };
+        report({
+          status: 'ready',
+          sample: (target, lon, lat) => controller.sample(target, lon, lat),
+        });
+        applyVisibilityDisplay(controller, requester, visibilityRef.current);
+      },
+      () => {
+        if (!widget.isDestroyed()) report({ status: 'unavailable' });
+      },
+    );
+  }, [visibility]);
+
+  // Where the Sun-and-relief shading stops: south of the layers' coverage while one is visible.
+  useEffect(() => {
+    const widget = widgetRef.current;
+    const material = widget?.scene.globe.material;
+    if (!widget || !material) return;
+    material.uniforms.unshadedBelowZ = layerShadeCutZ;
+    widget.scene.requestRender();
+  }, [layerShadeCutZ]);
 
   // The shared time moved (live tick, playback, an edit): re-point the Sun light and the sky.
   useEffect(() => {
@@ -1368,6 +1680,7 @@ export function MoonGlobe({
   useEffect(() => {
     insetsRef.current = viewInsets;
     refitRef.current();
+    applyTopRef.current();
   }, [viewInsets]);
 
   // The stage: the canvas and what is pinned to it, shifted so the straight-down camera's centre
@@ -1419,9 +1732,10 @@ export function MoonGlobe({
     flyWholeRef.current();
   };
 
-  const showSouthPole = () => {
+  const showPole = (mode: PoleMode) => {
     interactRef.current();
-    flySouthPoleRef.current();
+    setPoleMode(mode);
+    flySouthPoleRef.current(mode);
   };
 
   return (
@@ -1460,22 +1774,14 @@ export function MoonGlobe({
           onZoomIn={() => zoomBy(0.5)}
           onZoomOut={() => zoomBy(2)}
           onWholeMoon={showWholeMoon}
-          onSouthPole={showSouthPole}
+          poleMode={poleMode}
+          onPoleMode={showPole}
           showGrid={showGrid}
           onShowGridChange={onShowGridChange}
-          elevationLayer={elevationLayer?.layer ?? null}
-          elevationAvailable={elevationAvailable}
-          onElevationLayerChange={onElevationLayerChange}
+          onToggleLayers={onToggleLayers}
+          layersOpen={layersOpen}
           onPresent={onPresent}
         />
-      </div>
-
-      {/* The zoom readout: bottom right, just above the timeline, clear of the icon column. */}
-      <div
-        className={joinClassNames(styles.readoutCorner, controlsHidden && styles.cornerHidden)}
-        aria-hidden={controlsHidden || undefined}
-      >
-        {readout ? <ZoomReadout values={readout} /> : null}
       </div>
 
       <div ref={creditRef} className={styles.cesiumCredits} aria-hidden="true" />
@@ -1509,6 +1815,15 @@ function sunGlowImage(colour: string): HTMLCanvasElement {
 /** A CSS colour at an opacity, for canvas gradients. */
 function withAlpha(colour: string, alpha: number): string {
   return Color.fromCssColorString(colour).withAlpha(alpha).toCssColorString();
+}
+
+/**
+ * Layer order: basemap, then elevation and slope, then the visibility overlay on top
+ * (docs/LANDER_RULES.md, "Visibility prototype layer", Display).
+ */
+function raiseVisibility(widget: CesiumWidget, handle: VisibilityHandle | null) {
+  if (!handle || widget.isDestroyed()) return;
+  raiseOverlayToTop(widget.imageryLayers, controllerLayers(handle.controller));
 }
 
 /** Swaps a beacon's image and hover text; true when the image changed (so it fades back in). */

@@ -1,28 +1,43 @@
+import { useState, type PointerEvent } from 'react';
+import { bodyNow, type PositionSamples } from '../../utils/riseSet';
 import { joinClassNames } from '../../utils/classNames';
 import {
   DAY_MS,
   HOUR_MS,
   dayTicks,
+  formatAmman,
   formatClock,
+  formatClockShort,
   formatDayMonth,
+  goodTimeText,
   windowStatus,
-  windowStatusText,
+  type TimeRange,
   type TimeWindowMs,
 } from '../../utils/time';
+import { TimePopover } from './TimePopover';
 import { PLAY_SPEEDS, useTime } from './timeContext';
 import styles from './TimeBar.module.css';
 
 interface TimeBarProps {
-  /** Landing windows at the selected site (Sun and Earth both up), drawn as green zones. */
+  /** Good times to land at the selected site (Sun and Earth both up), drawn as green zones. */
   windows: readonly TimeWindowMs[];
-  /** Whose windows they are, for the legend ("Demo Site Alpha"); null when no site is selected. */
-  windowsFor: string | null;
+  /** The selected site or point, whose Sun and Earth the status describes; null shows none. */
+  site: { lat: number; lon: number } | null;
+  /** A fixed site's own positions (JPL Horizons), used where they have the time; else the engine. */
+  positions?: PositionSamples | null;
   /** Folded to a thin line; the shell keeps this so the overlays above can follow. */
   folded: boolean;
   onFoldedChange: (folded: boolean) => void;
   /** Its id, so a skip button can move focus to it. */
   id?: string;
   className?: string;
+  /** The dates picked in the wizard: the bar covers exactly these instead of 29.5 days. */
+  rangeOverride?: TimeRange | null;
+  /** "No data after 31 Dec 2027": said beside the status when the time is outside the data. */
+  limitNote?: string | null;
+  /** The view has moved away from the dates picked in step 3: show "Back to my dates". */
+  away?: boolean;
+  onBackToDates?: () => void;
 }
 
 const ICON = {
@@ -37,35 +52,62 @@ const ICON = {
   'aria-hidden': true,
 } as const;
 
+const SMALL = { viewBox: '0 0 14 14', width: 14, height: 14, 'aria-hidden': true } as const;
+
+/** A small sun or Earth, so the status reads at a glance. */
+function BodyIcon({ body }: { body: 'sun' | 'earth' }) {
+  return body === 'sun' ? (
+    <svg {...SMALL} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <circle cx="7" cy="7" r="2.6" fill="currentColor" stroke="none" />
+      <path d="M7 1v1.6M7 11.4V13M1 7h1.6M11.4 7H13M2.8 2.8l1.1 1.1M10.1 10.1l1.1 1.1M11.2 2.8l-1.1 1.1M3.9 10.1l-1.1 1.1" />
+    </svg>
+  ) : (
+    <svg {...SMALL} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <circle cx="7" cy="7" r="5.2" />
+      <path d="M2.3 6c1.6-.2 2.2.8 2.8 1.4s1.6.4 1.5 1.6M8.3 2c-.2 1.2.5 1.9 1.4 2.2s1.8.5 2.1 1.3" />
+    </svg>
+  );
+}
+
 /**
- * The timeline along the bottom, Windy-style: Play first, the speeds, a day strip across the full
- * width with the selected site's landing windows (teal; computed from the real Sun and Earth) and
- * an orange marker for the selected time; scrub, step or play through one synodic month (29.5
- * days) around the app time. Folds to a line with its handle.
+ * The timeline along the bottom, one row: Play, the time (click for the calendar), ±1 day, a
+ * speed choice, a plain-words status of the Sun and Earth at the place, then "Back to my dates"
+ * (only when away) and Close. Under it the day strip: green is a good time to land (the Sun and
+ * Earth both up as the mission needs), grey is not. Hover reads the time at that point; a click
+ * jumps there.
  */
 export function TimeBar({
   windows,
-  windowsFor,
+  site,
+  positions = null,
   folded,
   onFoldedChange,
   id,
   className,
+  rangeOverride = null,
+  limitNote = null,
+  away = false,
+  onBackToDates,
 }: TimeBarProps) {
   const {
     time,
-    range,
+    range: movingRange,
     setScrubbing,
-    mode,
     playing,
     speed,
     setTime,
     stepBy,
-    goLive,
     setPlaying,
     setSpeed,
+    editorOpen,
     openEditor,
+    closeEditor,
   } = useTime();
+  const range = rangeOverride ?? movingRange;
   const toggleFolded = () => onFoldedChange(!folded);
+  // The calendar opens above the date button: it is drawn at the page's top level.
+  const [dateWrap, setDateWrap] = useState<HTMLSpanElement | null>(null);
+  const [hover, setHover] = useState<{ ms: number; pct: number } | null>(null);
 
   // Hold the range still while the slider is dragged; let go anywhere ends it. Playback stops
   // (it would fight the drag), and whichever of up or cancel comes first removes both
@@ -95,41 +137,26 @@ export function TimeBar({
   const ticks = dayTicks(range);
   const marker = at(Math.min(range.end, Math.max(range.start, time)));
 
-  if (folded) {
-    return (
-      <div
-        className={joinClassNames(styles.bar, styles.folded, className)}
-        id={id}
-        tabIndex={-1}
-        role="group"
-        aria-label="Time bar"
-        data-tour="timebar"
-      >
-        <div className={styles.line} aria-hidden="true">
-          {zones.map(({ window, left, width }) => (
-            <span
-              key={window.start}
-              className={styles.lineZone}
-              style={{ left: `${left}%`, width: `${width}%` }}
-            />
-          ))}
-          <span className={styles.lineMark} style={{ left: `${at(time)}%` }} />
-        </div>
-        <button
-          type="button"
-          className={styles.handle}
-          aria-label="Show the time bar"
-          aria-expanded={false}
-          onClick={toggleFolded}
-        >
-          <span aria-hidden="true">Timeline</span>
-          <svg {...ICON}>
-            <path d="M5.5 12.5 10 8l4.5 4.5" />
-          </svg>
-        </button>
-      </div>
-    );
-  }
+  const skyNow = site
+    ? {
+        sun: bodyNow(site, 'sun', time, { positions }),
+        earth: bodyNow(site, 'earth', time, { positions }),
+      }
+    : null;
+  const degrees = (elevation: number) => Math.max(0, Math.round(elevation));
+
+  const onTrackMove = (event: PointerEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    if (box.width <= 0) return;
+    const fraction = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+    setHover({
+      ms: Math.round((range.start + fraction * span) / HOUR_MS) * HOUR_MS,
+      pct: fraction * 100,
+    });
+  };
+
+  // Closed: the Time button next to Layers (in the app) opens it.
+  if (folded) return null;
 
   return (
     <div
@@ -163,20 +190,20 @@ export function TimeBar({
           )}
         </button>
 
-        <div className={styles.speeds} role="group" aria-label="Playback speed">
-          {PLAY_SPEEDS.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={styles.speed}
-              title={entry.hint}
-              aria-pressed={speed === entry.id}
-              onClick={() => setSpeed(entry.id)}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
+        <span ref={setDateWrap} className={styles.dateWrap}>
+          <button
+            type="button"
+            className={styles.date}
+            aria-expanded={editorOpen}
+            aria-haspopup="dialog"
+            aria-label={`Time: ${formatClock(time)}. Change the date and time`}
+            title={`${formatAmman(time)}. Click to set the date and time`}
+            onClick={(event) => (editorOpen ? closeEditor() : openEditor(event.currentTarget))}
+          >
+            {formatClockShort(time)}
+          </button>
+          {editorOpen ? <TimePopover anchor={dateWrap} /> : null}
+        </span>
 
         <button
           type="button"
@@ -185,9 +212,7 @@ export function TimeBar({
           title="Back 1 day"
           onClick={() => stepBy(-DAY_MS)}
         >
-          <svg {...ICON}>
-            <path d="M12 5.5 7.5 10l4.5 4.5" />
-          </svg>
+          −1 day
         </button>
         <button
           type="button"
@@ -196,96 +221,78 @@ export function TimeBar({
           title="Forward 1 day"
           onClick={() => stepBy(DAY_MS)}
         >
-          <svg {...ICON}>
-            <path d="m8 5.5 4.5 4.5L8 14.5" />
-          </svg>
+          +1 day
         </button>
-        <button
-          type="button"
-          className={styles.icon}
-          aria-label="Set the date and time"
-          title="Set the date and time"
-          onClick={(event) => openEditor(event.currentTarget)}
-        >
-          <svg {...ICON}>
-            <rect x="3.5" y="4.5" width="13" height="12" rx="1.5" />
-            <path d="M3.5 8.5h13M7 3v3M13 3v3" />
-          </svg>
-        </button>
+
+        <label className={styles.speedPick}>
+          <span className={styles.speedWord}>Speed:</span>
+          <select
+            className={styles.speedSelect}
+            value={speed}
+            aria-label="Playback speed"
+            onChange={(event) => {
+              const next = PLAY_SPEEDS.find((entry) => entry.id === event.target.value);
+              if (next) setSpeed(next.id);
+            }}
+          >
+            {PLAY_SPEEDS.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div className={styles.info}>
-          {status.kind === 'none' ? (
-            <span className={styles.countdown}>{windowStatusText(status)}</span>
-          ) : (
-            <button
-              type="button"
-              className={joinClassNames(styles.countdown, styles.countdownButton)}
-              title={`${windowStatusText(status)}. Jump to the start of this window`}
-              onClick={() => setTime(status.window.start)}
-            >
-              {windowStatusText(status)}
-            </button>
-          )}
-          <span
-            className={styles.legend}
-            title={`${windowsFor ? `Landing windows · ${windowsFor}` : 'No site selected'} · ${formatDayMonth(range.start)} – ${formatDayMonth(range.end)}`}
-          >
-            <span className={styles.legendZone} aria-hidden="true" />
-            <span className={styles.legendText}>
-              {windowsFor ? (
-                <>
-                  <span className={styles.legendPrefix}>Landing windows · </span>
-                  {windowsFor}
-                </>
-              ) : (
-                'No site selected'
-              )}{' '}
-              · {formatDayMonth(range.start)} – {formatDayMonth(range.end)}
+          {skyNow ? (
+            <span className={styles.sky} data-testid="sky-status">
+              <span className={styles.skyItem}>
+                <BodyIcon body="sun" />
+                {skyNow.sun.up ? `Sun up ${degrees(skyNow.sun.elevationDeg)}°` : 'Sun down'}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className={joinClassNames(styles.skyItem, !skyNow.earth.up && styles.skyOff)}>
+                <BodyIcon body="earth" />
+                {skyNow.earth.up ? 'Earth in view' : 'Earth not in view'}
+              </span>
+              <span className="visually-hidden">
+                {' '}
+                (real Sun and Earth, on a smooth Moon: no terrain)
+              </span>
             </span>
-          </span>
+          ) : (
+            <span className={styles.skyOff}>Pick a place to see the Sun and Earth</span>
+          )}
+          {limitNote ? (
+            <span className={styles.limit} role="status">
+              {limitNote}
+            </span>
+          ) : null}
         </div>
 
-        <button
-          type="button"
-          className={joinClassNames(styles.text, mode === 'live' && styles.textQuiet)}
-          onClick={goLive}
-        >
-          Now
-        </button>
+        {away && onBackToDates ? (
+          <button type="button" className={styles.backToDates} onClick={onBackToDates}>
+            Back to my dates
+          </button>
+        ) : null}
         <button
           type="button"
           className={styles.handle}
-          aria-label="Fold the time bar"
+          aria-label="Close the time bar"
           aria-expanded={true}
           onClick={toggleFolded}
         >
-          <span className={styles.handleLabel} aria-hidden="true">
-            Hide
-          </span>
           <svg {...ICON}>
-            <path d="M5.5 7.5 10 12l4.5-4.5" />
+            <path d="M5.5 5.5l9 9M14.5 5.5l-9 9" />
           </svg>
         </button>
       </div>
 
-      {/* The day strip: a tick at every UTC midnight, a label every few days (thinner on small
-          screens), and the selected time's marker running through it. */}
-      <div className={styles.days} aria-hidden="true">
-        {ticks.map((tick) => (
-          <span
-            key={tick.ms}
-            className={styles.day}
-            data-every2={tick.index % 2 === 0}
-            data-every3={tick.index % 3 === 0}
-            data-every6={tick.index % 6 === 0}
-            style={{ left: `${at(tick.ms)}%` }}
-          >
-            {tick.label}
-          </span>
-        ))}
-      </div>
-
-      <div className={styles.track}>
+      <div
+        className={styles.track}
+        onPointerMove={onTrackMove}
+        onPointerLeave={() => setHover(null)}
+      >
         <div className={styles.rail} aria-hidden="true">
           {ticks.map((tick) => (
             <span key={tick.ms} className={styles.tick} style={{ left: `${at(tick.ms)}%` }} />
@@ -299,6 +306,11 @@ export function TimeBar({
           ))}
         </div>
         <span className={styles.marker} style={{ left: `${marker}%` }} aria-hidden="true" />
+        {hover ? (
+          <span className={styles.hover} style={{ left: `${hover.pct}%` }} aria-hidden="true">
+            {formatClockShort(hover.ms)}
+          </span>
+        ) : null}
         <input
           className={styles.slider}
           type="range"
@@ -311,6 +323,18 @@ export function TimeBar({
           onPointerDown={startScrub}
           onChange={(event) => setTime(Number(event.target.value))}
         />
+      </div>
+
+      <div className={styles.foot}>
+        <span className={styles.footDate}>{formatDayMonth(range.start)}</span>
+        <span className={styles.legend}>
+          <span className={styles.legendZone} aria-hidden="true" />
+          Good time to land
+        </span>
+        <span className={styles.statusText} role="status">
+          {goodTimeText(status)}
+        </span>
+        <span className={styles.footDate}>{formatDayMonth(range.end)}</span>
       </div>
     </div>
   );

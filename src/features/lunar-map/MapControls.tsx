@@ -1,28 +1,27 @@
 import type { ReactNode } from 'react';
 import { Tooltip } from '../../components/Tooltip';
 import { joinClassNames } from '../../utils/classNames';
-import type { ElevationLayer } from '../../utils/elevationGrid';
+import type { PoleMode } from './cameraControls';
 import styles from './MapControls.module.css';
 
 interface MapControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onWholeMoon: () => void;
-  /** The tilted view over the south pole, where the polar sites fill the screen. */
-  onSouthPole?: () => void;
+  /** Which south-pole view is up: Top (straight down, the default) or 3D (tilted). */
+  poleMode?: PoleMode;
+  /** Flies to the Top or 3D view of the south pole. */
+  onPoleMode?: (mode: PoleMode) => void;
   showGrid: boolean;
   onShowGridChange: (show: boolean) => void;
   /** Presentation mode: just the Moon, the time bar and a small site label. */
   onPresent?: () => void;
-  /** The south-pole elevation or slope layer shown, if any. */
-  elevationLayer?: ElevationLayer | null;
-  /** False until an elevation file is loaded: the layer buttons then say "no data loaded yet". */
-  elevationAvailable?: boolean;
-  onElevationLayerChange?: (layer: ElevationLayer | null) => void;
+  /** Opens or closes the map layers panel (elevation, slope); absent when there are no layers. */
+  onToggleLayers?: () => void;
+  /** The map layers panel is open. */
+  layersOpen?: boolean;
   className?: string;
 }
-
-const NO_ELEVATION_YET = 'no elevation data loaded yet';
 
 const ICON_PROPS = {
   viewBox: '0 0 20 20',
@@ -41,33 +40,19 @@ interface IconButtonProps {
   tip: string;
   onClick: () => void;
   pressed?: boolean;
-  /** Shown but not usable yet (its tip says why); aria-disabled, so the tip still shows. */
-  unavailable?: boolean;
   children: ReactNode;
 }
 
-function IconButton({
-  label,
-  tip,
-  onClick,
-  pressed,
-  unavailable = false,
-  children,
-}: IconButtonProps) {
+function IconButton({ label, tip, onClick, pressed, children }: IconButtonProps) {
   return (
     <Tooltip content={tip} placement="left">
       {(describedBy) => (
         <button
           type="button"
-          className={joinClassNames(
-            styles.button,
-            pressed && styles.buttonOn,
-            unavailable && styles.buttonUnavailable,
-          )}
-          onClick={unavailable ? undefined : onClick}
+          className={joinClassNames(styles.button, pressed && styles.buttonOn)}
+          onClick={onClick}
           aria-label={label}
           aria-pressed={pressed}
-          aria-disabled={unavailable || undefined}
           aria-describedby={describedBy}
         >
           {children}
@@ -78,24 +63,23 @@ function IconButton({
 }
 
 /**
- * The map's own tools, a slim column on the right edge: zoom, whole Moon, the coordinate grid and
- * presentation mode. Each icon has a tooltip (on hover and focus) and an accessible name.
+ * The map's own tools, a slim column on the right edge: zoom, whole Moon, the coordinate grid, the
+ * map layers panel (elevation, slope) and presentation mode. Each icon has a tooltip (on hover and
+ * focus) and an accessible name.
  */
 export function MapControls({
   onZoomIn,
   onZoomOut,
   onWholeMoon,
-  onSouthPole,
+  poleMode = 'top',
+  onPoleMode,
   showGrid,
   onShowGridChange,
   onPresent,
-  elevationLayer = null,
-  elevationAvailable = false,
-  onElevationLayerChange,
+  onToggleLayers,
+  layersOpen = false,
   className,
 }: MapControlsProps) {
-  const toggleLayer = (layer: ElevationLayer) =>
-    onElevationLayerChange?.(elevationLayer === layer ? null : layer);
   return (
     <div className={joinClassNames(styles.controls, className)} role="group" aria-label="Map">
       <IconButton label="Zoom in" tip="Zoom in" onClick={onZoomIn}>
@@ -116,18 +100,25 @@ export function MapControls({
           <circle cx="12.2" cy="12" r="0.9" />
         </svg>
       </IconButton>
-      {onSouthPole ? (
-        <IconButton
-          label="South pole"
-          tip="South pole: tilted, so the polar sites fill the screen"
-          onClick={onSouthPole}
-        >
-          <svg {...ICON_PROPS}>
-            <circle cx="10" cy="10" r="6.5" />
-            <path d="M4.6 13.2c3.2 1.4 7.6 1.4 10.8 0" />
-            <circle cx="10" cy="16.5" r="0.9" fill="currentColor" />
-          </svg>
-        </IconButton>
+      {onPoleMode ? (
+        <>
+          <IconButton
+            label="Top"
+            tip="Top: straight down over the south pole, like a map"
+            onClick={() => onPoleMode('top')}
+            pressed={poleMode === 'top'}
+          >
+            <span className={styles.word}>Top</span>
+          </IconButton>
+          <IconButton
+            label="3D"
+            tip="3D: the same spot, tilted so the horizon and the Sun's angle show"
+            onClick={() => onPoleMode('3d')}
+            pressed={poleMode === '3d'}
+          >
+            <span className={styles.word}>3D</span>
+          </IconButton>
+        </>
       ) : null}
       <IconButton
         label="Latitude/longitude grid"
@@ -140,33 +131,19 @@ export function MapControls({
           <path d="M3.5 10h13M10 3.5c-2.4 2-2.4 11 0 13M10 3.5c2.4 2 2.4 11 0 13" />
         </svg>
       </IconButton>
-      {onElevationLayerChange ? (
-        <>
-          <IconButton
-            label="Elevation"
-            tip={
-              elevationAvailable ? 'Elevation (LOLA), south pole' : `Elevation: ${NO_ELEVATION_YET}`
-            }
-            onClick={() => toggleLayer('elevation')}
-            pressed={elevationLayer === 'elevation'}
-            unavailable={!elevationAvailable}
-          >
-            <svg {...ICON_PROPS}>
-              <path d="M3 15.5l4.5-7 3 4 2-2.5 4.5 5.5z" />
-            </svg>
-          </IconButton>
-          <IconButton
-            label="Slope"
-            tip={elevationAvailable ? 'Slope (LOLA), south pole' : `Slope: ${NO_ELEVATION_YET}`}
-            onClick={() => toggleLayer('slope')}
-            pressed={elevationLayer === 'slope'}
-            unavailable={!elevationAvailable}
-          >
-            <svg {...ICON_PROPS}>
-              <path d="M3.5 15.5h13M3.5 15.5L16.5 6M12.5 15.5a4.5 4.5 0 0 0-1.2-3.1" />
-            </svg>
-          </IconButton>
-        </>
+      {onToggleLayers ? (
+        <IconButton
+          label="Map layers"
+          tip="Map layers: elevation and slope, south pole"
+          onClick={onToggleLayers}
+          pressed={layersOpen}
+        >
+          <svg {...ICON_PROPS}>
+            <path d="M10 3.5l6.5 3.5-6.5 3.5L3.5 7z" />
+            <path d="M3.5 10.5l6.5 3.5 6.5-3.5" />
+            <path d="M3.5 13.5l6.5 3.5 6.5-3.5" />
+          </svg>
+        </IconButton>
       ) : null}
       {onPresent ? (
         <>

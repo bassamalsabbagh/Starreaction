@@ -57,8 +57,9 @@ export function beaconScaleAt(distanceM: number): number {
 }
 
 /**
- * A flat, glowing beacon as an SVG data URI: a soft halo in the score colour, a solid dot with a
- * dark rim, and the rank inside. Unsuitable sites (no rank) are a small grey dot with no number.
+ * A flat, glowing beacon as an SVG data URI: a soft halo in the beacon's colour, a solid dot with
+ * a dark rim, and the rank inside. Suitable sites are green with their rank; unsuitable sites (no
+ * rank) are a small red dot with no number (the colours are tokens: --color-pin-pass, -fail).
  * Every beacon keeps a faint halo out to its full size, so the whole 40px stays clickable (Cesium
  * ignores near-transparent pixels when picking). Colour is never the only signal: the number, the
  * list and the hover text carry the same rating.

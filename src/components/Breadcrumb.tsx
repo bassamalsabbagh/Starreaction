@@ -1,27 +1,25 @@
 import styles from './Breadcrumb.module.css';
 
 interface BreadcrumbProps {
-  missionName: string;
-  /** The level of the panel actually shown: none (the Moon), the mission, or a site or point. */
-  current: 'moon' | 'mission' | 'site';
-  /** The selected site or point, or null for none. */
-  siteName: string | null;
-  /** "Moon": clear the selection and show the ranked Sites. */
-  onMoon: () => void;
-  /** The mission: open the mission picker. */
+  /** The chosen location's name or coordinates, or null before one is chosen. */
+  locationName: string | null;
+  /** The mission's name, or null before a valid mission is entered. */
+  missionName: string | null;
+  /** Which crumb is the current wizard step: the Moon (nothing yet), the location or the mission. */
+  current: 'moon' | 'location' | 'mission';
+  /** Back to the Location step. */
+  onLocation: () => void;
+  /** Back to the Mission step. */
   onMission: () => void;
-  /** The site: show its card. */
-  onSite: () => void;
 }
 
-/** Where you are: "Moon › mission › site". Each step is a button back to that level. */
+/** Where you are in the wizard: "Moon › location › mission". Each crumb opens its step. */
 export function Breadcrumb({
+  locationName,
   missionName,
   current,
-  siteName,
-  onMoon,
+  onLocation,
   onMission,
-  onSite,
 }: BreadcrumbProps) {
   const here = (level: BreadcrumbProps['current']) => (current === level ? 'location' : undefined);
   return (
@@ -31,32 +29,33 @@ export function Breadcrumb({
           <button
             type="button"
             className={styles.crumb}
-            onClick={onMoon}
+            onClick={onLocation}
             aria-current={here('moon')}
           >
             Moon
           </button>
         </li>
-        <li className={styles.item}>
-          <button
-            type="button"
-            className={styles.crumb}
-            onClick={onMission}
-            aria-current={here('mission')}
-            title="Change the mission"
-          >
-            {missionName}
-          </button>
-        </li>
-        {siteName === null ? null : (
+        {locationName === null ? null : (
           <li className={styles.item}>
             <button
               type="button"
               className={styles.crumb}
-              onClick={onSite}
-              aria-current={here('site')}
+              onClick={onLocation}
+              aria-current={here('location')}
             >
-              {siteName}
+              {locationName}
+            </button>
+          </li>
+        )}
+        {missionName === null ? null : (
+          <li className={styles.item}>
+            <button
+              type="button"
+              className={styles.crumb}
+              onClick={onMission}
+              aria-current={here('mission')}
+            >
+              {missionName}
             </button>
           </li>
         )}

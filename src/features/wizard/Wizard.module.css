@@ -1,0 +1,173 @@
+.wizard {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-3) var(--space-4) var(--space-3);
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepItem {
+  min-width: 0;
+}
+
+.stepButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-1) 0;
+  border: 0;
+  border-bottom: 3px solid var(--color-border);
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.stepButton:disabled {
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+
+.stepButton:not(:disabled):hover {
+  color: var(--color-text);
+}
+
+.stepNumber {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid currentcolor;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepLabel {
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepDone {
+  border-bottom-color: var(--color-wizard-done);
+  color: var(--color-text);
+}
+
+.stepCurrent {
+  border-bottom-color: var(--color-wizard-current);
+  color: var(--color-text);
+}
+
+.stepCurrent .stepNumber {
+  border-color: var(--color-wizard-current);
+  background: var(--color-wizard-current);
+  color: var(--color-wizard-on-current);
+}
+
+/* Read out by screen readers when the step changes; not shown. */
+.announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-heading);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.title:focus {
+  outline: none;
+}
+
+/* The heading takes the focus only so screen readers land on the new step; it is not a control,
+   so it shows no ring. */
+.title:focus-visible {
+  outline: none;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Always at the foot of the panel, whatever the step's height. */
+.nav {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.back,
+.next {
+  min-width: 6.5rem;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.back {
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.next {
+  margin-left: auto;
+  border: 1px solid var(--color-wizard-current);
+  background: var(--color-wizard-current);
+  color: var(--color-wizard-on-current);
+}
+
+.back:disabled,
+.next:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.back:not(:disabled):hover {
+  background: var(--color-wizard-hover);
+}
+
+.next:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+
+.blocked {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}

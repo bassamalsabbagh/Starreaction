@@ -22,7 +22,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['vite.config.ts', 'eslint.config.js', 'scripts/**/*.mjs'],
+    files: ['vite.config.ts', 'eslint.config.js', 'scripts/**/*.mjs', 'scripts/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
   // Must stay last: turns off stylistic rules that conflict with Prettier.

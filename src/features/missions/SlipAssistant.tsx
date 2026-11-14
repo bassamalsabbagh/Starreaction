@@ -8,14 +8,10 @@ import {
   type ReactNode,
   type Ref,
 } from 'react';
-import {
-  formatDays,
-  formatShare,
-  verdictText,
-  type DemoMission,
-  type DemoSite,
-} from '../../data/demoData';
+import { formatDays, formatShare, verdictText, type DemoMission } from '../../data/demoData';
 import { formatNeedsMet, needsMet } from '../../data/needsMet';
+import type { HorizonsSeries } from '../../services/horizonsData';
+import type { Site } from '../../services/sites';
 import { readSlipText, type SlipResult } from '../../services/slipApi';
 import {
   SLIP_TEXT_MAX,
@@ -30,6 +26,7 @@ import {
   formatWindowRange,
   type TimeRange,
 } from '../../utils/time';
+import { dateRangeText } from './dateRange';
 import { planSlip, type SlipNeedLine, type SlipPlan } from './slipPlan';
 import { answerQuestion, type SlipAnswer } from './slipQuestion';
 import styles from './SlipAssistant.module.css';
@@ -49,10 +46,14 @@ interface SlipAssistantProps {
   mission: DemoMission;
   /** The time bar's time: a shift counts from here. */
   time: number;
-  /** The time bar's range: "which site is best?" without months answers for it. */
+  /** The range being checked: "which site is best?" without months answers for it. */
   range: TimeRange;
-  /** The demo sites, for questions about when or where to land. */
-  sites: readonly DemoSite[];
+  /** How an answer names that range ("the time bar’s range", "the dates you picked"). */
+  rangeName?: string;
+  /** The fixed sites' JPL Horizons positions by site id, for the answers. */
+  series?: ReadonlyMap<string, HorizonsSeries>;
+  /** The landing sites, for questions about when or where to land. */
+  sites: readonly Site[];
   /** "Go there" on an answer: that mission and site, the time bar at that moment. */
   onGoToSite: (missionId: string, siteId: string, ms: number) => void;
   /** Uses the reading (the mission, its needs and the time). */
@@ -95,6 +96,8 @@ export function SlipAssistant({
   mission,
   time,
   range,
+  rangeName,
+  series,
   sites,
   onGoToSite,
   onApply,
@@ -137,15 +140,18 @@ export function SlipAssistant({
       sites,
       time,
       range,
+      rangeName,
+      series,
       now: phase.at,
     });
-  }, [phase, plan, mission, sites, time, range]);
+  }, [phase, plan, mission, sites, time, range, rangeName, series]);
 
   // With an answer, the read-back shows only when the text also changes something.
   const showReadBack =
     plan !== null &&
     (answer === null ||
       plan.time !== null ||
+      plan.range !== null ||
       plan.changed ||
       plan.errors.length > 0 ||
       plan.mission.kind === 'unknown');
@@ -265,8 +271,9 @@ export function SlipAssistant({
       {phase.kind === 'unavailable' ? formButton : null}
       {phase.kind === 'applied' ? (
         <p className={styles.hint}>
-          Worked out by the app from the real Sun and Earth; the sites and needs are{' '}
-          <span className={styles.demo}>DEMO</span>. The AI only read your text.
+          Worked out by the app from the real Sun and Earth at the real landing sites; a demo
+          mission&apos;s needs are <span className={styles.demo}>DEMO</span>. The AI only read your
+          text.
         </p>
       ) : null}
 
@@ -374,6 +381,15 @@ function ReadBack({
             )}
           </dd>
         </div>
+        {plan.range ? (
+          <div className={styles.line}>
+            <dt>Dates checked</dt>
+            <dd>
+              <strong>{dateRangeText(plan.range.range)}</strong>
+              {plan.range.how ? <span className={styles.how}>{plan.range.how}</span> : null}
+            </dd>
+          </div>
+        ) : null}
         {plan.needs.map((line) => (
           <div key={line.field} className={styles.line}>
             <dt>{line.label}</dt>
@@ -460,7 +476,7 @@ const NOTHING_CHANGED =
   'Nothing changed: your text gives the same date and needs as now. To change something, try “Launch slipped 3 weeks”; to ask, try “Which site is best this month?”.';
 
 const NOTHING_READ_HINT =
-  'I can read a change, like “Launch slipped 3 weeks”, or a question: when or where to land, days of sunlight at a site, the most Earth time, or whether a site passes, like “Does Demo Site Bravo pass for Demo Mission B?”. Other questions aren’t read; try an example above.';
+  'I can read a change, like “Launch slipped 3 weeks”, or a question: when or where to land, days of sunlight at a site, the most Earth time, or whether a site passes, like “Does IM-2 Athena pass for Demo Mission B?”. Other questions aren’t read; try an example above.';
 
 const ANSWER_TITLE: Readonly<Record<SlipQuestionAbout, string>> = {
   when: 'When to land',
@@ -491,8 +507,8 @@ function Answer({
   const siteHow = answer.siteNamed
     ? 'the site in your text'
     : about === 'earth'
-      ? `the most Earth time of ${answer.siteCount} demo sites`
-      : `best of ${answer.siteCount} demo sites; ${answer.suitableCount} ${answer.suitableCount === 1 ? 'passes' : 'pass'} all the checks`;
+      ? `the most Earth time of ${answer.siteCount} sites`
+      : `best of ${answer.siteCount} sites; ${answer.suitableCount} ${answer.suitableCount === 1 ? 'passes' : 'pass'} all the checks`;
   const spanDays = span ? (span.end - span.start) / DAY_MS : 0;
   const line = (term: string, value: ReactNode, how?: string) => (
     <div className={styles.line}>
@@ -544,7 +560,7 @@ function Answer({
             site ? (
               <strong>{site.name}</strong>
             ) : (
-              `No demo site passes all the checks for ${mission.name} in these months.`
+              `No site passes all the checks for ${mission.name} in these months.`
             ),
             site ? siteHow : undefined,
           )}
@@ -600,8 +616,9 @@ function Answer({
         </div>
       ) : null}
       <p className={styles.hint}>
-        Worked out by the app from the real Sun and Earth; the sites and needs are{' '}
-        <span className={styles.demo}>DEMO</span>. The AI only read your question.
+        Worked out by the app from the real Sun and Earth at the real landing sites; a demo
+        mission&apos;s needs are <span className={styles.demo}>DEMO</span>. The AI only read your
+        question.
       </p>
     </div>
   );

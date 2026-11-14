@@ -1,0 +1,20 @@
+/* A data-status or source tag: a small outlined pill beside the value it describes. */
+.tag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: 0.0625rem;
+}
+
+/* No value to stand behind (Unavailable, not published): greyer. */
+.quiet {
+  border-color: color-mix(in srgb, var(--color-status-unavailable) 45%, transparent);
+  color: var(--color-status-unavailable);
+}

@@ -1,6 +1,6 @@
-# Overnight plan (2026-11-13)
+# Overnight plan
 
-Agreed with the user on 2026-11-13. Work through the items in priority order without stopping. When
+Agreed with the user . Work through the items in priority order without stopping. When
 something can't be decided, pick the safest option that follows this plan and `CLAUDE.md`, note it
 in the report, and keep going.
 
@@ -31,7 +31,7 @@ in the report, and keep going.
 The same site shows different window lengths in different places: Demo Site Delta shows "10.2 d
 window" in the Sites list and in Compare's Power row, but its Best window is 16 Nov 23:00 to 29 Nov
 20:00 UTC (12.9 days); Demo Site Bravo shows 13.1 d in one place and 13.2 days in another. Find the
-real cause first. Part of it may be on purpose (since 2026-11-12, cards show the part of the window
+real cause first. Part of it may be on purpose (cards show the part of the window
 inside this month); clearer labels are a fine outcome. Every place shows the same number for the
 same thing, or the two are labelled clearly. Tests.
 
@@ -65,7 +65,7 @@ itself is manual verification.
 - "Best date between X and Y": the AI only reads the two dates (every number and month must appear
   in the text); the app searches that span with the same checks as Other dates and shows the best
   window with Go. At most 12 months. Past ranges are allowed and labelled "in the past". Tests for
-  backwards, too-long and past ranges. (Much of this exists locally since 2026-11-12; it was not
+  backwards, too-long and past ranges. (Much of this exists locally; it was not
   deployed.)
 - Exactly three more question types, read by the AI and answered by the app: "how many days of
   sunlight at X?", "which site has the most Earth time?" and "does X pass for Mission Y?".
@@ -93,7 +93,7 @@ iframe, no copied page), crediting "Miral". Information only: it doesn't change 
   chapter's range for space Li-ion packs and label 143 a **team assumption**.
 - Labelled a simplified model: no shadows, no panel losses, the battery figure is a minimum. Tests.
 
-### 7. Click a point at the south pole → elevation and slope (replaced 2026-11-13)
+### 7. Click a point at the south pole → elevation and slope
 
 Built now without real data, so a real file only needs dropping in and one command.
 

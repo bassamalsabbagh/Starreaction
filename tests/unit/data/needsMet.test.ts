@@ -18,6 +18,9 @@ function result(usableDays: number, daysNeeded: number, open = false) {
   const sky: SiteSky = {
     sunPct: 50,
     earthPct: 50,
+    sunHours: 0,
+    earthHours: 0,
+    bothHours: 0,
     longestSunlitDays: usableDays,
     longestWindowDays: usableDays,
     windows: usableDays > 0 ? [window] : [],

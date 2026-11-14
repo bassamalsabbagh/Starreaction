@@ -5,6 +5,7 @@ const READING = {
   missionName: null,
   shift: { shift: 3, unit: 'weeks' },
   date: null,
+  range: null,
   powerDays: null,
   minSunDeg: null,
   minEarthDeg: null,

@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "generatedUtc": "2026-11-14T03:13:50Z",
+  "limitDeg": 0.2,
+  "nearHorizonDeg": 1,
+  "engineDays": "2026-11-13 00:00 UTC + 3 days, every 10 minutes",
+  "allPass": true,
+  "diagnosis": null,
+  "engine": [
+    {
+      "site": "im1",
+      "body": "sun",
+      "samples": 433,
+      "maxDiffDeg": 0.0068,
+      "meanDiffDeg": 0.0027,
+      "maxAzDiffDeg": 0.0092,
+      "pass": true
+    },
+    {
+      "site": "im1",
+      "body": "earth",
+      "samples": 433,
+      "maxDiffDeg": 0.0055,
+      "meanDiffDeg": 0.0025,
+      "maxAzDiffDeg": 0.0056,
+      "pass": true
+    },
+    {
+      "site": "im2",
+      "body": "sun",
+      "samples": 433,
+      "maxDiffDeg": 0.0065,
+      "meanDiffDeg": 0.0027,
+      "maxAzDiffDeg": 0.0093,
+      "pass": true
+    },
+    {
+      "site": "im2",
+      "body": "earth",
+      "samples": 433,
+      "maxDiffDeg": 0.0055,
+      "meanDiffDeg": 0.0025,
+      "maxAzDiffDeg": 0.0055,
+      "pass": true
+    }
+  ],
+  "flags": [
+    {
+      "file": "earth-bg1.txt",
+      "site": "bg1",
+      "target": "Earth (399)",
+      "rows": 62,
+      "agree": 62,
+      "disagree": 0,
+      "nearHorizon": 0,
+      "pass": true
+    },
+    {
+      "file": "earth-ch3.txt",
+      "site": "ch3",
+      "target": "Earth (399)",
+      "rows": 62,
+      "agree": 62,
+      "disagree": 0,
+      "nearHorizon": 1,
+      "pass": true
+    },
+    {
+      "file": "earth-im1.txt",
+      "site": "im1",
+      "target": "Earth (399)",
+      "rows": 62,
+      "agree": 62,
+      "disagree": 0,
+      "nearHorizon": 2,
+      "pass": true
+    },
+    {
+      "file": "earth-im2.txt",
+      "site": "im2",
+      "target": "Earth (399)",
+      "rows": 62,
+      "agree": 62,
+      "disagree": 0,
+      "nearHorizon": 12,
+      "pass": true
+    },
+    {
+      "file": "sun-bg1.txt",
+      "site": "bg1",
+      "target": "Sun (10)",
+      "rows": 62,
+      "agree": 62,
+      "disagree": 0,
+      "nearHorizon": 0,
+      "pass": true
+    },
+    {
+      "file": "sun-ch3.txt",
+      "site": "ch3",
+      "target": "Sun (10)",
+      "rows": 62,
+      "agree": 62,
+      "disagree": 0,
+      "nearHorizon": 1,
+      "pass": true
+    },
+    {
+      "file": "sun-im2.txt",
+      "site": "im2",
+      "target": "Sun (10)",
+      "rows": 62,
+      "agree": 62,
+      "disagree": 0,
+      "nearHorizon": 12,
+      "pass": true
+    }
+  ],
+  "elevations": [
+    {
+      "file": "sun-bg1.txt",
+      "site": "bg1",
+      "rows": 31,
+      "maxDiffDeg": 0.0053,
+      "meanDiffDeg": 0.0024,
+      "pass": true
+    },
+    {
+      "file": "sun-ch3.txt",
+      "site": "ch3",
+      "rows": 31,
+      "maxDiffDeg": 0.0058,
+      "meanDiffDeg": 0.0025,
+      "pass": true
+    }
+  ],
+  "skipped": []
+}

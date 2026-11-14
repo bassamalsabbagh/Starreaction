@@ -26,6 +26,14 @@
   fill: color-mix(in srgb, var(--color-ground) 70%, var(--color-text-faint));
 }
 
+/* A direction whose terrain is only known part of the way out ("cut off at data edge"). */
+.edgeCut {
+  fill: color-mix(in srgb, var(--color-status-placeholder) 14%, transparent);
+  stroke: color-mix(in srgb, var(--color-status-placeholder) 55%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
 .horizon {
   stroke: var(--color-text-muted);
   stroke-width: 1.5;
@@ -45,7 +53,7 @@
 
 .axis {
   fill: var(--color-text-muted);
-  /* 12px (was 11px): the app's smallest text, raised for projectors (2026-11-13). */
+  /* 12px (was 11px): the app's smallest text, raised for projectors. */
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -108,7 +116,8 @@
 
 .swatchSun,
 .swatchEarth,
-.swatchMin {
+.swatchMin,
+.swatchCut {
   width: 14px;
   height: 2px;
   border-radius: var(--radius-pill);
@@ -124,6 +133,13 @@
 
 .swatchMin {
   background: repeating-linear-gradient(90deg, var(--color-sun) 0 4px, transparent 4px 8px);
+}
+
+.swatchCut {
+  height: 10px;
+  border: 1px dashed color-mix(in srgb, var(--color-status-placeholder) 55%, transparent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-status-placeholder) 14%, transparent);
 }
 
 .horizonNote {

@@ -231,7 +231,7 @@ Mission needs (Sun for power, Power needed, Earth for contact): bg-well chips, l
 ### Cards / Containers
 
 - **Site row** (Sites view): rank, name, a teal bar for the usable window, and the value of the chosen order ("13.9 d window", "62% Earth up"). The #1 row carries the orange best-match marker, its best window and the month's Sun and Earth shares. Above the list: "Go to coordinates" and the order switch (Longest window, Most sunlight, Most Earth time, Name).
-- **Place card** (a site or any point): "‹ All sites"; name, rank (sites), coordinates or the nearest demo site; the verdict line with a status dot; two "now" tiles (Sun · power, Earth · comms: height, then sets or rises in …); the horizon view; the best window and window bar; the month's numbers; the two checks (Power, Comms: OK or Fails with the value behind it); Other dates (next six months, each with Go); Compare (sites) and Share; "How this is worked out".
+- **Place card** (a site or any point): "‹ All sites"; name, rank (sites), coordinates or the nearest landing site; the verdict line with a status dot; two "now" tiles (Sun · power, Earth · comms: height, then sets or rises in …); the horizon view; the best window and window bar; the month's numbers; the two checks (Power, Comms: OK or Fails with the value behind it); Other dates (next six months, each with Go); Compare (sites) and Share; "How this is worked out".
 - **Horizon view**: a sky chart in a well: compass directions along the bottom (S in the middle for a northern place, N for a southern one), height up the side in round steps, the ground below 0°, the Sun's and Earth's paths over the month, their dots now with names, the mission's lowest Sun height dashed. The scale follows the sky, so the pole's few degrees fill the chart. Flat horizon until terrain data exists, and it says so.
 - **Lessons card**: one real past landing: name and outcome word, who · when · where, what happened, "The lesson" in orange, a note on conflicts or journalism, and source links.
 
@@ -250,7 +250,9 @@ Play leads (round, off-white), then the speeds (1 h/s, 6 h/s, 1 day/s; the selec
 
 ### Point pin and point card ("Anywhere on the Moon")
 
-A click on bare Moon (not a beacon), or typed coordinates, drops a **pin**: a 22px orange ring with a centre dot, the dark halo on both sides, and a "Your point" tag; it stays at full strength near the rim like the selection ring. The cursor is a crosshair over the ground. The panel opens the same **place card** a site gets, named by its coordinates ("12.4° N, 31.8° W") with the nearest demo site as a quiet underlined link.
+Site **beacons** are green (`--color-pin-pass`) when the site passes every check for the dates checked, and red (`--color-pin-fail`) when it doesn't (they were off-white and grey). Suitable beacons carry their rank number; unsuitable ones are a smaller dot with no number. The hover text gives the verdict in words, so colour is never the only signal.
+
+A click on bare Moon (not a beacon), or typed coordinates, drops a **pin**: a 22px orange ring with a centre dot, the dark halo on both sides, and a "Your point" tag; it stays at full strength near the rim like the selection ring. The cursor is a crosshair over the ground. The panel opens the same **place card** a site gets, named by its coordinates ("12.4° N, 31.8° W") with the nearest landing site as a quiet underlined link.
 
 ### Status line
 

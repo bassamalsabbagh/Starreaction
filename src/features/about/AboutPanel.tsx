@@ -1,5 +1,9 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
-import { DEMO_LABEL } from '../../data/demoData';
+import { HORIZONS_INDEX } from '../../services/horizonsData';
+import { formatDayMonth } from '../../utils/time';
+import { AboutNotes } from './AboutNotes';
+import { SourcesList } from './SourcesList';
+import { HorizonsCheckTable } from './HorizonsCheckTable';
 import styles from './AboutPanel.module.css';
 
 export type AboutTab = 'about' | 'how' | 'roadmap' | 'credits';
@@ -16,27 +20,36 @@ const ROADMAP: readonly { text: string; done: boolean }[] = [
   { text: 'Time to sunset and Earthset, and the horizon view', done: true },
   { text: 'Anywhere on the Moon: click or type coordinates', done: true },
   { text: 'Add your own mission needs', done: true },
-  { text: 'Launch slipped? Describe the change in a sentence', done: true },
   {
-    text: 'Real landing sites (Apollo, CLPS targets, other countries), each value cited',
+    text: 'Launch slipped? Describe the change in a sentence, and an assistant reads it into the settings (future plan)',
     done: false,
+  },
+  {
+    text: 'Real landing sites (IM-1, IM-2, Blue Ghost Mission 1, Chandrayaan-3), each value cited',
+    done: true,
   },
   { text: 'Terrain horizons at the south pole from LOLA elevation data', done: false },
 ];
+
+/** "1 Nov 2026". */
+const dateText = (ms: number) => `${formatDayMonth(ms)} ${new Date(ms).getUTCFullYear()}`;
+
+/** "from 1 Nov 2026 to 31 Dec 2027": the dates the Horizons files cover; null without them. */
+const HORIZONS_DATES = HORIZONS_INDEX
+  ? `from ${dateText(HORIZONS_INDEX.startMs)} to ${dateText(HORIZONS_INDEX.startMs + (HORIZONS_INDEX.count - 1) * HORIZONS_INDEX.stepMinutes * 60_000)}`
+  : null;
 
 interface AboutPanelProps {
   tab: AboutTab;
   onTabChange: (tab: AboutTab) => void;
   onClose: () => void;
-  onTakeTour: () => void;
-  onWatchDemo: () => void;
-  /** Opens Lessons from past landings. */
-  onLessons: () => void;
   /** The map's data credits (from the lunar map feature). */
   credits: ReactNode;
   nonEndorsement: string;
   /** The product's name, for the title ("CLPS Lander Advisor"). */
   appName: string;
+  /** Whether the "Launch slipped?" assistant is on (its guide line and AI notice show only then). */
+  slipAssistant?: boolean;
 }
 
 /**
@@ -47,12 +60,10 @@ export function AboutPanel({
   tab,
   onTabChange,
   onClose,
-  onTakeTour,
-  onWatchDemo,
-  onLessons,
   credits,
   nonEndorsement,
   appName,
+  slipAssistant = false,
 }: AboutPanelProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -157,52 +168,54 @@ export function AboutPanel({
               <p>
                 Pick a place and a date on the Moon, and see at once whether a mission gets sunlight
                 for power and the Earth in view to talk home, how long until sunset and Earthset,
-                and what changes if the plan slips. The Sun and Earth are real; the sites and
-                mission profiles here are demo data.
+                and what changes if the plan slips. The Sun and Earth are real, and the sites are
+                real landings; the mission&apos;s needs are the ones you enter.
               </p>
               <h3 className={styles.subhead}>Finding your way</h3>
               <ul className={styles.guide}>
                 <li>
-                  <strong>The Moon</strong> fills the screen, lit by the real Sun. Drag to turn it,
-                  scroll to zoom. Click a site to open it, or anywhere else to check that spot.
+                  <strong>Plan</strong> on the left walks through four steps: 1 Location (type
+                  coordinates, click the Moon or take a past landing), 2 Mission (its name and
+                  needs), 3 Dates, and 4 Results. Back keeps what you entered.
                 </li>
                 <li>
-                  <strong>The menu</strong> on the left: Mission, Sites, Compare and Lessons each
-                  open in the one panel beside it. Click the item again, press Esc or use the ‹ tab
-                  to put the panel away. Demo and About sit at the bottom.
+                  <strong>Results</strong> shows the hours with the Sun up, the Earth up and both,
+                  sampled every hour, with the pass or fail of each check. More details holds the
+                  horizon view, the best window, other dates and night survival.
                 </li>
                 <li>
-                  <strong>Sites</strong> lists the sites best first (the longest usable window this
-                  month), or by sunlight, Earth time or name. Type coordinates at the top to check
-                  any place.
+                  <strong>Compare</strong> puts up to four past landings side by side for the same
+                  mission and dates, the longest usable window first.
                 </li>
                 <li>
-                  <strong>A site&apos;s card</strong> shows the Sun and Earth now with the time left
-                  before each sets, the horizon view (their paths over the month, seen from the
-                  site), the best window, and other dates for when the plan slips.
+                  <strong>Along the bottom</strong> on the Results step, the timeline over the dates
+                  you picked. Teal stretches are the windows.
                 </li>
                 <li>
-                  <strong>Along the bottom</strong>, the timeline: play or drag through the month.
-                  Teal stretches are the windows. The line above it shows the clock (Live or
-                  Simulated) and the Sun and Earth at the selected place.
+                  <strong>Moon Power Lab: battery and panel calculator</strong> (Power Lab in the
+                  menu): how big a battery a lander needs to survive the Moon night.
                 </li>
                 <li>
-                  <strong>On the right</strong>: zoom, the whole Moon, the grid, and presentation
-                  mode (H).
+                  <strong>On the map</strong>: Top and 3D views of the south pole, zoom, the whole
+                  Moon, the grid, Layers (bottom left) and presentation mode (H).
                 </li>
-                <li>
-                  <strong>Launch slipped?</strong> In the Mission view, describe the change in a
-                  sentence. An AI only reads it into the settings; the app checks every number
-                  against your text, works out the dates and shows what it read before anything
-                  changes. The mission form does the same by hand.
-                </li>
+                {slipAssistant ? (
+                  <li>
+                    <strong>Launch slipped?</strong> In the Mission view, describe the change in a
+                    sentence. An AI only reads it into the settings; the app checks every number
+                    against your text, works out the dates and shows what it read before anything
+                    changes. The mission form does the same by hand.
+                  </li>
+                ) : null}
               </ul>
-              <p className={styles.note} data-testid="ai-notice">
-                The &ldquo;Launch slipped?&rdquo; box sends what you type to Google&apos;s Gemini
-                API on its free tier. Google may use text sent to the free tier, and its replies, to
-                improve its models, and people may review it, so don&apos;t type anything private or
-                sensitive. Nothing you type is stored by this app.
-              </p>
+              {slipAssistant ? (
+                <p className={styles.note} data-testid="ai-notice">
+                  The &ldquo;Launch slipped?&rdquo; box sends what you type to Google&apos;s Gemini
+                  API on its free tier. Google may use text sent to the free tier, and its replies,
+                  to improve its models, and people may review it, so don&apos;t type anything
+                  private or sensitive. Nothing you type is stored by this app.
+                </p>
+              ) : null}
               <dl className={styles.facts}>
                 <dt>Event</dt>
                 <dd>NASA Space Apps 2026 - Amman</dd>
@@ -220,36 +233,46 @@ export function AboutPanel({
           {tab === 'how' ? (
             <div className={styles.prose}>
               <p>
-                Pick a mission. Its needs are three numbers and a yes or no: how high the Sun must
-                be for its solar panels to give power, how many days of power it needs in a row, how
-                high the Earth must be to talk to it directly, and whether it has a relay instead.
+                Enter your mission. Its needs are three numbers and a yes or no: how high the Sun
+                must be for its solar panels to give power, how many days of power it needs in a
+                row, how high the Earth must be to talk to it directly, and whether it has a relay
+                instead.
               </p>
               <p>
                 For every site (or any point you pick), the app works out where the real Sun and
-                Earth are every hour over the time bar&apos;s 29.5 days (one lunar day and night),
-                as seen from that place. Two checks follow:
+                Earth are every hour over the range checked, as seen from that place. The range is
+                the dates you pick in the Dates step (today and the next 14 days at first, up to 12
+                months), sampled every hour. Three checks follow, each measuring one thing:
               </p>
               <ol className={styles.gates}>
                 <li>
-                  <strong>Power:</strong> the longest unbroken stretch with the Sun high enough,
-                  and, without a relay, the Earth up at the same time, must last the days the
-                  mission needs.
+                  <strong>Power:</strong> the Sun only. The longest unbroken stretch with the Sun
+                  high enough must last the days the mission needs.
                 </li>
                 <li>
-                  <strong>Comms:</strong> without a relay, the Earth must rise high enough at some
-                  point in the month.
+                  <strong>Comms:</strong> the Earth only. Without a relay, the Earth must rise high
+                  enough at some point in the range; a mission with a relay always passes.
+                </li>
+                <li>
+                  <strong>Usable window:</strong> the Sun and the Earth both. The longest stretch
+                  with both up at once must last the days the mission needs. With a relay the usable
+                  window is the power stretch, so it is not listed separately.
                 </li>
               </ol>
               <p>
                 A window is a stretch with the Sun up and, for a mission without a relay, the Earth
-                up too. Sites are listed by their longest usable window. Sunset and Earthset are
-                when each body next drops below the horizon, found to about a minute.
+                up too. Compare orders the past landings by their longest usable window. Sunset and
+                Earthset are when each body next drops below the horizon. +7 days moves both dates
+                by seven days; +1 month moves both by one calendar month.
               </p>
               <p className={styles.demoLine}>
-                <span className={styles.demoTag}>{DEMO_LABEL}</span> The Sun and Earth positions are
-                real (astronomy-engine, checked against NASA/JPL Horizons). The sites and the
-                mission needs are made up. The horizon is a smooth Moon: crater rims and hills,
-                which matter most at the south pole, are not counted yet.
+                The Sun and Earth positions are real:{' '}
+                {HORIZONS_DATES
+                  ? `JPL Horizons at the four landing sites ${HORIZONS_DATES}; our engine (astronomy-engine) for clicked points and other dates, checked against JPL Horizons`
+                  : 'our engine (astronomy-engine), checked against JPL Horizons'}
+                , and the sites are real landings. The mission&apos;s needs are yours. The horizon
+                is a smooth Moon: crater rims and hills, which matter most at the south pole, are
+                not counted yet.
               </p>
             </div>
           ) : null}
@@ -267,19 +290,14 @@ export function AboutPanel({
             </ul>
           ) : null}
 
-          {tab === 'credits' ? credits : null}
-        </div>
-
-        <div className={styles.footer}>
-          <button type="button" className={styles.tour} onClick={onTakeTour}>
-            Take the tour
-          </button>
-          <button type="button" className={styles.tour} onClick={onWatchDemo} data-demo-start="">
-            Watch the short demo
-          </button>
-          <button type="button" className={styles.tour} onClick={onLessons}>
-            Lessons from past landings
-          </button>
+          {tab === 'credits' ? (
+            <>
+              {credits}
+              <HorizonsCheckTable />
+              <AboutNotes />
+              <SourcesList />
+            </>
+          ) : null}
         </div>
       </div>
     </div>

@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_DEMO_MISSION,
-  DEMO_SITES,
   assessSky,
-  bestDemoSite,
-  rankDemoSites,
+  bestSite,
+  rankSites,
 } from '../../../../src/data/demoData';
 import { terrainProfileFor } from '../../../../src/data/terrainPatches';
 import {
   QUESTION_RANGES_AHEAD,
+  SITE_ALIASES,
   answerQuestion,
   findSiteByName,
 } from '../../../../src/features/missions/slipQuestion';
+import { SITES, findSite } from '../../../../src/services/sites';
 import type { SlipQuestion } from '../../../../src/services/slipReading';
 import { hourlySky, sampledSpan, siteSky } from '../../../../src/utils/skyVisibility';
 import { RANGE_MS, dayCentre, rangeAround, type TimeRange } from '../../../../src/utils/time';
@@ -28,7 +29,7 @@ function answer(text: string, overrides: Partial<SlipQuestion>, now = TIME) {
   return answerQuestion(question(overrides), {
     text,
     mission: DEFAULT_DEMO_MISSION,
-    sites: DEMO_SITES,
+    sites: SITES,
     time: TIME,
     range: RANGE,
     now,
@@ -37,8 +38,8 @@ function answer(text: string, overrides: Partial<SlipQuestion>, now = TIME) {
 
 /** A site's sky over a span, the way the Sites list works it out. */
 function skyOver(siteIndex: number, span: TimeRange) {
-  const site = DEMO_SITES[siteIndex];
-  if (!site) throw new Error('no such demo site');
+  const site = SITES[siteIndex];
+  if (!site) throw new Error('no such site');
   const sky = siteSky(
     hourlySky(sampledSpan(span)),
     site,
@@ -82,20 +83,18 @@ describe('answerQuestion: the three more questions (2026-11-13)', () => {
     expect(result.sky?.sunPct).toBe(sky.sunPct);
   });
 
-  it('asks for a site when the sunlight or pass question names none, or a site that is not a demo site', () => {
+  it('asks for a site when the sunlight or pass question names none, or a site that is not ours', () => {
     const none = answer('How many days of sunlight?', { about: 'sunlight' });
-    expect(none.errors).toEqual([
-      `Name one of the demo sites in your question, like “${DEMO_SITES[0]?.name ?? ''}”.`,
-    ]);
+    expect(none.errors).toEqual(['Name one of the sites in your question, like “IM-1 Odysseus”.']);
     expect(none.span).toBeNull();
     const unknown = answer('Does Shackleton pass?', { about: 'passes', siteName: 'Shackleton' });
-    expect(unknown.dropped).toEqual(["“Shackleton” isn't a demo site."]);
+    expect(unknown.dropped).toEqual(["“Shackleton” isn't one of our sites."]);
     expect(unknown.errors).toHaveLength(1);
   });
 
   it('"which site has the most Earth time": the largest Earth share, ties by name', () => {
     const result = answer('Which site has the most Earth time?', { about: 'earth' });
-    const shares = DEMO_SITES.map((_, index) => skyOver(index, RANGE));
+    const shares = SITES.map((_, index) => skyOver(index, RANGE));
     const top = [...shares].sort(
       (a, b) => b.sky.earthPct - a.sky.earthPct || a.site.name.localeCompare(b.site.name),
     )[0];
@@ -104,19 +103,26 @@ describe('answerQuestion: the three more questions (2026-11-13)', () => {
     expect(result.siteNamed).toBe(false);
     // A named site is noted and not used: this question compares every site.
     expect(
-      answer('Does Demo Site Alpha have the most Earth time?', {
+      answer('Does IM-1 Odysseus have the most Earth time?', {
         about: 'earth',
-        siteName: 'Demo Site Alpha',
+        siteName: 'IM-1 Odysseus',
       }).dropped,
     ).toEqual(['A site name is not used for this question: it compares every site.']);
   });
 
   it('"does X pass for Mission Y": the same checks as the Sites list, for that mission', () => {
-    const { site, sky } = skyOver(6, RANGE);
+    const { site, sky } = skyOver(1, RANGE);
     const result = answer(`Does ${site.name} pass?`, { about: 'passes', siteName: site.name });
     const expected = assessSky(sky, DEFAULT_DEMO_MISSION, RANGE);
     expect(result.assessment?.suitable).toBe(expected.suitable);
     expect(result.assessment?.failTitles).toEqual(expected.failTitles);
+  });
+
+  it('knows a site by a short name in the text: "Does Athena pass?" is IM-2 Athena', () => {
+    const result = answer('Does Athena pass?', { about: 'passes', siteName: 'Athena' });
+    expect(result.site).toBe(findSite('im2'));
+    expect(result.siteNamed).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 });
 
@@ -124,12 +130,12 @@ describe('answerQuestion: the three more questions (2026-11-13)', () => {
 function bestOver(span: TimeRange) {
   const samples = hourlySky(sampledSpan(span));
   const sky = new Map(
-    DEMO_SITES.map((site) => [
+    SITES.map((site) => [
       site.id,
       siteSky(samples, site, DEFAULT_DEMO_MISSION, span, terrainProfileFor(site.id)),
     ]),
   );
-  return bestDemoSite(rankDemoSites(DEMO_SITES, DEFAULT_DEMO_MISSION, sky, span));
+  return bestSite(rankSites(SITES, DEFAULT_DEMO_MISSION, sky, span));
 }
 
 describe('answerQuestion: the months', () => {
@@ -223,12 +229,12 @@ describe('answerQuestion: the site', () => {
     expect(result.siteNamed).toBe(false);
     expect(result.site?.id).toBe(best?.site.id);
     expect(result.assessment?.bestWindow).toEqual(best?.assessment.bestWindow);
-    expect(result.siteCount).toBe(DEMO_SITES.length);
+    expect(result.siteCount).toBe(SITES.length);
   });
 
   it('answers for a site named in the text, with its own checks', () => {
-    const site = DEMO_SITES[1];
-    if (!site) throw new Error('needs two demo sites');
+    const site = SITES[1];
+    if (!site) throw new Error('needs two sites');
     const result = answer(`When is the best time to land at ${site.name} in March?`, {
       siteName: site.name.toLowerCase(),
       from: { month: 'March', year: null },
@@ -251,21 +257,80 @@ describe('answerQuestion: the site', () => {
     expect(result.assessment?.suitable).toBe(own.suitable);
   });
 
-  it('checks every site when the name is not in the text or not a demo site', () => {
-    expect(answer('When should we land?', { siteName: 'Demo Site Alpha' }).dropped).toEqual([
+  it('checks every site when the name is not in the text or not one of ours', () => {
+    expect(answer('When should we land?', { siteName: 'IM-1 Odysseus' }).dropped).toEqual([
       "A site name that isn't in your text was not used, so every site was checked.",
     ]);
 
     const result = answer('When should we land at Shackleton?', { siteName: 'Shackleton' });
     expect(result.siteNamed).toBe(false);
-    expect(result.dropped).toEqual(["“Shackleton” isn't a demo site, so every site was checked."]);
+    expect(result.dropped).toEqual([
+      "“Shackleton” isn't one of our sites, so every site was checked.",
+    ]);
   });
 
-  it('matches site names like mission names', () => {
-    const site = DEMO_SITES[0];
-    if (!site) throw new Error('needs a demo site');
-    const short = site.name.replace(/^Demo /, '');
-    expect(findSiteByName(DEMO_SITES, `  ${short.toUpperCase()} `)).toBe(site);
-    expect(findSiteByName(DEMO_SITES, 'Nowhere')).toBeUndefined();
+  it('matches a site by its name, id or alias, ignoring case, spaces and hyphens', () => {
+    const id = (name: string) => findSiteByName(SITES, name)?.id;
+    expect(id('  im 1 odysseus ')).toBe('im1');
+    expect(id('IM-1')).toBe('im1');
+    expect(id('Odysseus')).toBe('im1');
+    expect(id('im1')).toBe('im1');
+    expect(id('IM2')).toBe('im2');
+    expect(id('athena')).toBe('im2');
+    expect(id('Blue Ghost')).toBe('bg1');
+    expect(id('blue-ghost mission 1')).toBe('bg1');
+    expect(id('BG1')).toBe('bg1');
+    expect(id('Chandrayaan 3')).toBe('ch3');
+    expect(id('Chandrayaan')).toBe('ch3');
+    expect(id('VIKRAM')).toBe('ch3');
+    expect(id('ch3')).toBe('ch3');
+    for (const unknown of ['Nowhere', 'IM-3', 'Ghost', '', ' - ']) {
+      expect(id(unknown)).toBeUndefined();
+    }
+  });
+
+  it('keeps aliases only for real sites', () => {
+    for (const id of Object.keys(SITE_ALIASES)) expect(findSite(id)).toBeDefined();
+  });
+});
+
+describe('answerQuestion: JPL Horizons positions (docs/LANDER_RULES.md)', () => {
+  it('uses a site’s Horizons series where it has one, and the engine for the other sites', () => {
+    const start = RANGE.start - 20 * 86_400_000;
+    const count = (70 * 86_400_000) / 600_000 + 1;
+    // Made-up series (not Horizons data): the Sun 30° up and the Earth 20° up all the time.
+    const series = new Map([
+      [
+        'im2',
+        {
+          siteId: 'im2',
+          startMs: start,
+          stepMs: 600_000,
+          count,
+          sunAz: new Uint16Array(count).fill(9000),
+          sunEl: new Int16Array(count).fill(3000),
+          earthAz: new Uint16Array(count).fill(0),
+          earthEl: new Int16Array(count).fill(2000),
+        },
+      ],
+    ]);
+    const ask = (siteName: string) =>
+      answerQuestion(question({ about: 'sunlight', siteName }), {
+        text: `How many days of sunlight at ${siteName}?`,
+        mission: DEFAULT_DEMO_MISSION,
+        sites: SITES,
+        time: TIME,
+        range: RANGE,
+        now: TIME,
+        series,
+      });
+    expect(ask('IM-2 Athena').sky?.sunPct).toBe(100);
+    // IM-1 has no series here: the engine, the same as without any series.
+    expect(ask('IM-1 Odysseus').sky).toEqual(
+      answer('How many days of sunlight at IM-1 Odysseus?', {
+        about: 'sunlight',
+        siteName: 'IM-1 Odysseus',
+      }).sky,
+    );
   });
 });

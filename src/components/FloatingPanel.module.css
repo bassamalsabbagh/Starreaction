@@ -1,15 +1,15 @@
-/* Beside the rail, below the top row, above the bottom stack (status line and time bar). The dock
-   slides as one piece; the handle rides on its right edge. */
+/* Flush with the left edge and the top, full height, right of the rail (like a map app's side
+   panel). The dock slides as one piece; the handle rides on its right edge. */
 .dock {
   position: absolute;
-  top: var(--top-bar-height);
-  left: calc(var(--panel-gap) + var(--rail-width) + var(--space-2));
+  top: 0;
+  bottom: 0;
+  left: var(--rail-width);
   z-index: 30;
   display: flex;
-  width: min(var(--panel-width), calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem));
-  max-height: calc(100dvh - var(--top-bar-height) - var(--bottom-stack, 9rem) - var(--space-3));
+  width: min(var(--panel-width), calc(100vw - var(--rail-width) - 2.5rem));
   /* Closed: behind the rail (which sits above it), only the handle showing. */
-  transform: translateX(calc(-100% - var(--space-2)));
+  transform: translateX(-100%);
 }
 
 .open {
@@ -17,20 +17,19 @@
 }
 
 .wide {
-  width: min(
-    var(--compare-width, 46rem),
-    calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem)
-  );
+  width: min(var(--compare-width, 46rem), calc(100vw - var(--rail-width) - 2.5rem));
 }
 
 .panel {
   composes: panel from '../styles/glass.module.css';
+  composes: light from '../styles/glass.module.css';
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-width: 0 1px 0 0;
+  border-radius: 0;
   box-shadow: var(--shadow-float);
 }
 
@@ -42,7 +41,7 @@
 .handle {
   composes: panel from '../styles/glass.module.css';
   position: absolute;
-  top: var(--space-4);
+  top: var(--top-bar-height);
   left: 100%;
   display: grid;
   place-items: center;
@@ -58,13 +57,8 @@
   cursor: pointer;
 }
 
-/* Closed, it stands on its own just right of the rail: moved by translate, not margin, so
-   nothing reflows. */
-.dock:not(.open) .handle {
-  translate: var(--space-2) 0;
-  border-left-color: var(--glass-edge);
-  border-radius: var(--radius-md);
-}
+/* Closed, it stays on the rail's edge (the dock slides behind the rail, the handle rides on its
+   right edge), so it never floats on the map. */
 
 .dock:not(.open) .arrow {
   rotate: 180deg;
@@ -105,4 +99,33 @@
   .arrow {
     transition: rotate 250ms var(--ease-out);
   }
+}
+
+/* The logo and the name, one row, above the step tabs. Full colour, no fade. */
+.brand {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.mark {
+  display: block;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
+.brandName {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* "Reaction" in the deep gold of the logo. */
+.reaction {
+  color: var(--color-brand-reaction);
 }

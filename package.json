@@ -22,7 +22,9 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run format:check && npm run test && npm run build"
+    "check": "npm run lint && npm run format:check && npm run test && npm run build",
+    "horizons:fetch": "node scripts/run-ts.mjs scripts/fetch_horizons.ts",
+    "horizons:check": "node scripts/run-ts.mjs scripts/horizons_check.ts"
   },
   "dependencies": {
     "astronomy-engine": "2.1.19",

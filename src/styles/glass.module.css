@@ -1,8 +1,52 @@
-/* The floating panel, shared by composition (`composes: panel from …`): solid deep navy, a
-   subtle 1px edge. No backdrop blur, so nothing over the moving Moon is redrawn each frame. */
+/* Every floating surface (side panel, top bar, rail, map controls, status line, time bar, About,
+   Layers), shared by composition (`composes: panel from …`): opaque white with dark,
+   high-contrast text. Every colour token inside points at the light palette in global.css. No
+   backdrop blur, so nothing over the moving Moon is redrawn each frame. */
 .panel {
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--light-panel-edge);
   border-radius: var(--radius-md);
-  background: var(--color-panel);
-  box-shadow: inset 0 1px 0 var(--glass-sheen);
+  background: var(--light-panel-fill);
+  box-shadow: var(--shadow-float);
+  /* The colour tokens inside point at the light palette. */
+  --color-text: var(--light-text);
+  --color-text-muted: var(--light-text-muted);
+  --color-text-faint: var(--light-text-faint);
+  --color-text-muted-projector: var(--light-text-muted);
+  --color-text-faint-projector: var(--light-text-faint);
+  --color-border: var(--light-border);
+  --color-border-strong: var(--light-border-strong);
+  --color-surface: var(--light-raised);
+  --color-panel: var(--light-input);
+  --color-panel-raised: var(--light-raised);
+  --color-bg: var(--light-input);
+  --color-input: var(--light-input);
+  --color-accent: var(--light-accent);
+  --color-on-primary: var(--light-on-current);
+  --color-focus: var(--accent-text);
+  --color-score-great: var(--light-pass);
+  --color-score-poor: var(--light-fail);
+  --color-error: var(--light-fail);
+  --color-status-demo: var(--light-fail);
+  --color-link: var(--light-link);
+  --color-wizard-current: var(--light-current);
+  --color-wizard-on-current: var(--light-on-current);
+  --color-wizard-done: var(--light-done);
+  --color-wizard-hover: var(--light-hover);
+  color: var(--color-text);
+  color-scheme: light;
+  --color-brand-star: var(--light-text);
+  --glass-edge: var(--light-panel-edge);
+  --glass-fill: var(--light-panel-fill);
+}
+
+/* The larger type of the side panel and the Layers popup. */
+.light {
+  --font-size-xs: 0.9375rem;
+  --font-size-caption: 1rem;
+  --font-size-sm: 1.0625rem;
+  --font-size-md: 1.125rem;
+  --font-size-lg: 1.25rem;
+  --font-size-title: 1.5rem;
+  --font-size-heading: 1.75rem;
+  font-size: var(--font-size-md);
 }

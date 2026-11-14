@@ -44,8 +44,8 @@ export const NO_INSETS: ViewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
  */
 export interface MapController {
   showWholeMoon: () => void;
-  /** The tilted view over the south pole (southPoleView). */
-  showSouthPole: () => void;
+  /** The view over the south pole (southPoleView): straight down (Top) or tilted (3D). */
+  showSouthPole: (mode?: PoleMode) => void;
   saveView: () => unknown;
   restoreView: (view: unknown) => void;
 }
@@ -56,13 +56,23 @@ export interface MapController {
  * stays the default; this one is a button and a demo step.
  */
 export const SOUTH_POLE_VIEW = {
-  /** The circle that must fit: from the pole out to this latitude. */
-  edgeLatDeg: -80,
+  /**
+   * The circle that must fit: from the pole out to this latitude. 75° S, so the whole 80° S circle
+   * (where the polar sites are) fits with a margin.
+   */
+  edgeLatDeg: -75,
   /** How far below the horizontal the view meets the pole (90 would be straight down). */
   tiltDeg: 50,
   /** The share of the visible width and height the circle may fill. */
   fill: 0.9,
 } as const;
+
+/** The two south-pole views: straight down like a map, or tilted so the horizon shows. */
+export type PoleMode = 'top' | '3d';
+
+/** How far below the horizontal each view meets the pole. Top stays just off 90°, where a
+ * heading has no meaning. */
+export const POLE_TILT_DEG: Readonly<Record<PoleMode, number>> = { top: 89.9, '3d': 45 };
 
 /** A camera placement: where it is (radians, metres above the sphere) and where it looks. */
 export interface CameraPose {
@@ -90,11 +100,12 @@ export function southPoleView(
   mapWidth: number,
   mapHeight: number,
   insets: ViewInsets,
+  tiltDeg: number = SOUTH_POLE_VIEW.tiltDeg,
 ): CameraPose {
   const areaWidth = Math.max(1, mapWidth - insets.left - insets.right);
   const areaHeight = Math.max(1, mapHeight - insets.top - insets.bottom);
   const radiusM = MOON_RADIUS_M * (((90 + SOUTH_POLE_VIEW.edgeLatDeg) * Math.PI) / 180);
-  const tilt = (SOUTH_POLE_VIEW.tiltDeg * Math.PI) / 180;
+  const tilt = (tiltDeg * Math.PI) / 180;
   const kHeight = focalPx / ((SOUTH_POLE_VIEW.fill * areaHeight) / 2);
   const kWidth = focalPx / ((SOUTH_POLE_VIEW.fill * areaWidth) / 2);
   const byHeight = radiusM * (Math.cos(tilt) + kHeight * Math.sin(tilt));

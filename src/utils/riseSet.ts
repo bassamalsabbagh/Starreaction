@@ -2,13 +2,29 @@
  * Where the Sun or the Earth is in a place's sky now, and when it next sets or rises over the
  * horizon: the challenge's "time remaining before sunset or Earthset". Real geometry (lunarSky),
  * on the app's smooth sphere, so the horizon is 0° elevation (no terrain yet, KNOWN_ISSUES KI-014).
+ * "Up", sets and rises are of the upper limb (docs/LANDER_RULES.md, "Is it up: the upper limb");
+ * `elevationDeg` stays the centre's.
  *
- * The search steps through the cached hourly samples, then narrows the crossing down to about a
- * minute by bisection with direct ephemeris calls. Pure, no React.
+ * With the app's engine, the search steps through the cached hourly samples, then narrows the
+ * crossing down to about a minute by bisection with direct ephemeris calls. With a site's own
+ * samples (JPL Horizons every 10 minutes, docs/LANDER_RULES.md "Sun and Earth positions: JPL
+ * Horizons"), it steps through those samples and places the crossing by straight-line
+ * interpolation between the two around it; outside the samples' dates the engine takes over.
+ * Pure, no React.
  */
-import { azimuthElevationOf, elevationOf, lunarSky, type LatLon, type Vec3 } from './lunarSky';
+import {
+  EARTH_RADIUS_KM,
+  SUN_RADIUS_KM,
+  angularRadiusDeg,
+  azimuthElevationOf,
+  distanceFromSite,
+  lunarSky,
+  upperLimbTest,
+  type LatLon,
+  type Vec3,
+} from './lunarSky';
 import { skyAtHour } from './skyVisibility';
-import { DAY_MS, HOUR_MS } from './time';
+import { DAY_MS, HOUR_MS, formatCountdown } from './time';
 
 export type SkyBody = 'sun' | 'earth';
 
@@ -23,24 +39,114 @@ export interface BodyNow {
 /** How far ahead to look for the next set or rise: a little over a lunar day. */
 export const RISE_SET_SEARCH_MS = 32 * DAY_MS;
 
+/**
+ * A site's own position samples (e.g. JPL Horizons): every `stepMs` from `startMs`, the body's
+ * azimuth and elevation in degrees, interpolated between samples; null outside its dates.
+ */
+export interface PositionSamples {
+  readonly startMs: number;
+  readonly stepMs: number;
+  azEl(body: SkyBody, t: number): { azimuth: number; elevation: number } | null;
+}
+
+export interface BodyNowOptions {
+  /** The horizon the body rises over and sets below, degrees (default 0°, a smooth Moon). */
+  horizonDeg?: number;
+  searchMs?: number;
+  /** The site's own samples, used where they have the time; the engine elsewhere. */
+  positions?: PositionSamples | null;
+}
+
 function position(body: SkyBody, ms: number): Vec3 {
   const sky = lunarSky(new Date(ms));
   return body === 'sun' ? sky.sun : sky.earth;
 }
 
-/** The body's position now, and its next crossing of the horizon (`horizonDeg`, default 0°). */
+const RADIUS_KM: Readonly<Record<SkyBody, number>> = { sun: SUN_RADIUS_KM, earth: EARTH_RADIUS_KM };
+
+/**
+ * The body's angular radius at `t` from the site, degrees, from our engine's distance for that
+ * hour: the site's own samples hold only directions.
+ */
+function limbDegAt(place: LatLon, body: SkyBody, t: number): number {
+  const sky = skyAtHour(Math.floor(t / HOUR_MS));
+  return angularRadiusDeg(RADIUS_KM[body], distanceFromSite(sky[body], place));
+}
+
+/**
+ * The countdown to the next crossing, worded as a forecast: "Forecast: dark in 2 d 4 h" (sunset),
+ * "Forecast: Sun rises in …", "Forecast: Earth sets in …", "Forecast: Earth rises in …".
+ */
+export function forecastText(
+  body: SkyBody,
+  next: NonNullable<BodyNow['next']>,
+  time: number,
+): string {
+  const left = formatCountdown(next.at - time);
+  if (body === 'sun') {
+    return next.kind === 'set' ? `Forecast: dark in ${left}` : `Forecast: Sun rises in ${left}`;
+  }
+  return `Forecast: Earth ${next.kind === 'set' ? 'sets' : 'rises'} in ${left}`;
+}
+
+/**
+ * The body's position now, and its next crossing of the horizon: from `positions` when they cover
+ * `time`, otherwise from the engine.
+ */
 export function bodyNow(
   place: LatLon,
   body: SkyBody,
   time: number,
-  horizonDeg = 0,
-  searchMs = RISE_SET_SEARCH_MS,
+  { horizonDeg = 0, searchMs = RISE_SET_SEARCH_MS, positions = null }: BodyNowOptions = {},
+): BodyNow {
+  const now = positions?.azEl(body, time) ?? null;
+  if (!positions || !now) return engineBodyNow(place, body, time, horizonDeg, searchMs);
+  // The upper limb's height: the centre plus the angular radius (docs/LANDER_RULES.md, "Is it
+  // up: the upper limb").
+  const limb = (t: number, elevation: number) => elevation + limbDegAt(place, body, t);
+  let lastLimb = limb(time, now.elevation);
+  const up = lastLimb > horizonDeg;
+  const result = (next: BodyNow['next']): BodyNow => ({
+    elevationDeg: now.elevation,
+    azimuthDeg: now.azimuth,
+    up,
+    next,
+  });
+  let lastT = time;
+  const { startMs, stepMs } = positions;
+  const first = startMs + (Math.floor((time - startMs) / stepMs) + 1) * stepMs;
+  for (let t = first; t <= time + searchMs; t += stepMs) {
+    const sample = positions.azEl(body, t);
+    if (!sample) {
+      // The samples end before the search does: the engine carries on from the last one.
+      const rest = engineBodyNow(place, body, lastT, horizonDeg, time + searchMs - lastT);
+      return result(rest.up === up ? rest.next : { kind: up ? 'set' : 'rise', at: lastT });
+    }
+    const sampleLimb = limb(t, sample.elevation);
+    if (sampleLimb > horizonDeg !== up) {
+      const fraction = (horizonDeg - lastLimb) / (sampleLimb - lastLimb);
+      return result({ kind: up ? 'set' : 'rise', at: lastT + fraction * (t - lastT) });
+    }
+    lastT = t;
+    lastLimb = sampleLimb;
+  }
+  return result(null);
+}
+
+/** The engine's answer: hourly samples, then bisection to about a minute. */
+function engineBodyNow(
+  place: LatLon,
+  body: SkyBody,
+  time: number,
+  horizonDeg: number,
+  searchMs: number,
 ): BodyNow {
   const target = position(body, time);
   const { azimuth, elevation } = azimuthElevationOf(target, place);
-  const up = elevation >= horizonDeg;
+  const limbUp = upperLimbTest(place);
   const above = (ms: number, vector?: Vec3) =>
-    elevationOf(vector ?? position(body, ms), place) >= horizonDeg;
+    limbUp(vector ?? position(body, ms), RADIUS_KM[body], horizonDeg);
+  const up = above(time, target);
 
   let before = time;
   let next: BodyNow['next'] = null;

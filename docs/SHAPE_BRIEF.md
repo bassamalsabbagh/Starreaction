@@ -1,10 +1,10 @@
 # Shape Brief: Workspace Shell, Lander-First Advisor
 
-> **Superseded in part (2026-10-26):** the layout is now two docked sidebars (Plan and Site
+> **Superseded in part:** the layout is now two docked sidebars (Plan and Site
 > details) over a full-window map; TopBar, ExplorationSidebar, ReasoningPanel and the step labels
 > named below were removed. See DESIGN.md for the current structure.
 
-**Status:** confirmed by the user on 2026-10-24 (via `/impeccable shape`).
+**Status:** confirmed by the user (via `/impeccable shape`).
 **Target:** `src/app/App.tsx` and the components it composes.
 **Origin:** the two P1 issues from the first `/impeccable critique` of `src/app/App.tsx`
 (`.impeccable/critique/2026-10-23T22-42-01Z__src-app-app-tsx.md`):

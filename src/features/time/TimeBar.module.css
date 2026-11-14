@@ -1,4 +1,5 @@
-/* The timeline: one solid strip from the rail to the readout, controls over a day strip. */
+/* The timeline: one solid strip from the rail to the readout. One row of controls, the day
+   strip with its good times to land in green, and a line under it with the dates and a legend. */
 .bar {
   composes: panel from '../../styles/glass.module.css';
   display: flex;
@@ -16,13 +17,11 @@
 .controls {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.icon,
-.text,
-.speed {
+.icon {
   display: inline-grid;
   flex: none;
   place-items: center;
@@ -41,97 +40,135 @@
   transition-timing-function: ease-out;
 }
 
-.icon:hover,
-.text:hover,
-.speed:hover {
+.icon:hover {
   background: var(--color-surface);
   color: var(--color-text);
 }
 
-/* Play leads the row: the timeline's main action, off-white and a size up. */
+/* Play leads the row: a visible icon on the accent colour. */
 .play {
   min-width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--color-text);
-  color: var(--color-on-primary);
+  background: var(--color-accent);
+  color: var(--on-accent);
 }
 
 .play:hover {
-  background: color-mix(in srgb, var(--color-text) 85%, transparent);
-  color: var(--color-on-primary);
+  background: color-mix(in srgb, var(--color-accent) 85%, #000);
+  color: var(--on-accent);
 }
 
-.text {
+/* The current time; clicking it opens the calendar. */
+.dateWrap {
+  display: inline-flex;
+  flex: none;
+}
+
+.date {
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.date:hover {
+  background: var(--color-surface);
+}
+
+/* The day steps are words, not arrows: "−1 day" and "+1 day". */
+.step {
+  min-width: 4.25rem;
   padding: 0 var(--space-2);
   border-color: var(--color-border-strong);
-}
-
-/* "Now" while already live: still there, just quiet. */
-.textQuiet {
-  border-color: var(--color-border);
-  color: var(--color-text-faint);
-}
-
-.speeds {
-  display: flex;
-  flex: none;
-  margin: 0 var(--space-1);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-}
-
-/* Segments: square inside, rounded only at the group's ends, so the corners stay on the scale. */
-.speeds .speed {
-  border-radius: 0;
-}
-
-.speeds .speed:first-child {
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
-}
-
-.speeds .speed:last-child {
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
-
-.speed {
-  height: 32px;
-  padding: 0 var(--space-2);
-  font-family: var(--font-family-mono);
-  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.speed[aria-pressed='true'] {
-  box-shadow: inset 0 0 0 1px var(--color-accent);
-  color: var(--color-text);
+/* Speed: one small dropdown. */
+.speedPick {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
 }
 
-/* The countdown and whose windows these are: between the steps and Now, giving way first. */
+.speedSelect {
+  height: 32px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+}
+
+.speedSelect:focus-visible,
+.date:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* The status: the Sun and the Earth at the place, giving way (ellipsis) before the buttons. */
 .info {
   display: flex;
   flex: 1;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   min-width: 0;
-  margin: 0 var(--space-2);
+  margin: 0 var(--space-1);
 }
 
-/* Fold and unfold: a labelled handle, so it reads as one. */
+.sky {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.skyItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.skyOff {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+/* Close: a labelled-free X at the right end. */
 .handle {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 0.125rem;
+  justify-content: center;
+  min-width: 32px;
   height: 32px;
-  padding: 0 var(--space-1) 0 var(--space-2);
+  padding: 0;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: var(--font-size-caption);
   cursor: pointer;
   transition-property: color, border-color, background-color;
   transition-duration: 120ms;
@@ -144,51 +181,6 @@
   color: var(--color-text);
 }
 
-/* The day strip: labels over their ticks, every third day (every other on wide screens,
-   every sixth on small ones), so they stay readable. */
-.days {
-  position: relative;
-  height: 16px;
-  margin: 0 var(--space-2) 0 var(--space-1);
-  color: var(--color-text-faint);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-  line-height: 16px;
-}
-
-.day {
-  position: absolute;
-  top: 0;
-  display: none;
-  white-space: nowrap;
-  translate: -50% 0;
-}
-
-.day[data-every3='true'] {
-  display: block;
-}
-
-/* Wide screens: every other day instead (not as well), so the labels stay evenly spaced. */
-@media (min-width: 1600px) {
-  .day[data-every3='true'] {
-    display: none;
-  }
-
-  .day[data-every2='true'] {
-    display: block;
-  }
-}
-
-@media (max-width: 899px) {
-  .day[data-every3='true'] {
-    display: none;
-  }
-
-  .day[data-every6='true'] {
-    display: block;
-  }
-}
-
 .tick {
   position: absolute;
   top: -3px;
@@ -197,12 +189,11 @@
   background: var(--color-border-strong);
 }
 
-/* The selected time: an orange line through the day ticks, stopping under the labels so it never
-   cuts one (the slider's thumb rides on it). */
+/* The selected time: an accent line through the strip (the slider's thumb rides on it). */
 .marker {
   position: absolute;
-  top: -6px;
-  bottom: 0;
+  top: -4px;
+  bottom: -4px;
   width: 2px;
   border-radius: var(--radius-pill);
   background: var(--color-accent);
@@ -210,13 +201,13 @@
   pointer-events: none;
 }
 
-/* Its own full-width row, so the window zones read at laptop widths: the slider sits over a rail
+/* Its own full-width row, so the green zones read at laptop widths: the slider sits over a rail
    that carries them. The side margins leave room for the thumb at either end. */
 .track {
   position: relative;
   flex: none;
   height: 22px;
-  margin: 0 var(--space-2) 0 var(--space-1);
+  margin: var(--space-1) var(--space-2) 0 var(--space-1);
 }
 
 .rail {
@@ -224,7 +215,7 @@
   top: 50%;
   right: 0;
   left: 0;
-  height: 6px;
+  height: 8px;
   border-radius: var(--radius-pill);
   background: var(--color-border);
   translate: 0 -50%;
@@ -235,7 +226,22 @@
   top: 0;
   bottom: 0;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-window) 70%, transparent);
+  background: color-mix(in srgb, var(--color-window) 85%, transparent);
+}
+
+/* The time under the pointer, above the strip. */
+.hover {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  translate: -50% 0;
+  pointer-events: none;
 }
 
 .slider {
@@ -250,19 +256,19 @@
 }
 
 .slider::-webkit-slider-runnable-track {
-  height: 6px;
+  height: 8px;
   background: transparent;
 }
 
 .slider::-moz-range-track {
-  height: 6px;
+  height: 8px;
   background: transparent;
 }
 
 .slider::-webkit-slider-thumb {
   width: 14px;
   height: 22px;
-  margin-top: -8px;
+  margin-top: -7px;
   border: 2px solid var(--color-bg);
   border-radius: var(--radius-sm);
   background: var(--color-accent);
@@ -283,146 +289,110 @@
   border-radius: var(--radius-sm);
 }
 
-/* It shrinks with an ellipsis rather than run over Now (its full text is in the title). */
-/* The countdown is what you act on: it keeps its full width, and the legend gives way. */
-.countdown {
-  flex: none;
-  min-width: 0;
-  min-height: 32px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--color-text);
-  font-size: var(--font-size-caption);
+/* Under the strip: the first date, the legend and status, the last date. */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 var(--space-1);
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
-  line-height: 32px;
+  line-height: 16px;
   white-space: nowrap;
 }
 
-.countdownButton {
-  margin-left: calc(var(--space-1) * -1);
-  padding: 0 var(--space-1);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font: inherit;
-  font-size: var(--font-size-caption);
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--color-window) 60%, transparent);
-  text-underline-offset: 3px;
-  cursor: pointer;
-  transition: color 120ms ease-out;
-}
-
-.countdownButton:hover {
-  color: var(--color-window);
+.footDate {
+  flex: none;
 }
 
 .legend {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  color: var(--color-text-faint);
-  font-size: var(--font-size-caption);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* The legend gives way to the countdown: it shortens with an ellipsis, never wraps. */
-.legendText {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Projector widths: the green swatch already says "landing windows". */
-@media (max-width: 1439px) {
-  .legendPrefix {
-    display: none;
-  }
+  gap: var(--space-1);
+  color: var(--color-text-muted);
 }
 
 .legendZone {
   flex: none;
-  width: 14px;
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-window) 70%, transparent);
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-window);
 }
 
-/* Folded: one thin line with the windows and the time, and the button to open it again. */
-.folded {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--time-bar-folded-height);
-  padding: 0 var(--space-1) 0 var(--space-3);
-}
-
-.line {
-  position: relative;
+/* The countdown to the next good time, in plain words, fills the middle. */
+.statusText {
+  min-width: 0;
   flex: 1;
-  height: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--color-border);
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+  text-align: center;
+  text-overflow: ellipsis;
 }
 
-.lineZone {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-window) 70%, transparent);
+/* Beside the status: the time is outside the data ("No data after 31 Dec 2027"). */
+.limit {
+  flex: none;
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.lineMark {
-  position: absolute;
-  top: 50%;
-  width: 3px;
-  height: 11px;
-  border-radius: var(--radius-pill);
-  background: var(--color-accent);
-  translate: -50% -50%;
+/* Shown only while the view is away from the dates picked in step 3. */
+.backToDates {
+  flex: none;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.backToDates:hover {
+  background: var(--color-wizard-hover);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .icon:active,
-  .text:active,
-  .speed:active {
+  .icon:active {
     scale: 0.96;
   }
 
-  .icon,
-  .text,
-  .speed {
+  .icon {
     transition-property: color, border-color, background-color, scale;
   }
 }
 
-/* Narrower, things give way in order so nothing overlaps: the legend, then the day steps and
-   the fold label (the slider and its arrow keys still step), then the speed choice (6 h/s stays
-   set). */
+/* Narrower, things give way in order so nothing overlaps: the speed word, the day steps, the
+   status, then the speed choice itself. */
 @media (max-width: 1099px) {
-  .legend {
+  .speedWord {
     display: none;
   }
 }
 
 @media (max-width: 899px) {
-  .step,
-  .handleLabel {
+  .step {
     display: none;
-  }
-
-  .handle {
-    justify-content: center;
-    min-width: 32px;
-    padding: 0;
   }
 }
 
 @media (max-width: 767px) {
-  .speeds {
+  .info,
+  .speedPick {
     display: none;
+  }
+
+  .date {
+    flex: 1;
   }
 }

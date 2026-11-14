@@ -18,5 +18,8 @@ export default defineConfig({
     // The App tests wait up to 5 s for the lazy-loaded globe (tests/setup.ts); on a busy laptop the
     // first, cold load can take that long, so a test needs more than Vitest's default 5 s in all.
     testTimeout: 20_000,
+    // The App test files import the globe stand-in in a beforeAll hook; with the whole suite
+    // running at once that first import can take over Vitest's default 10 s hook limit.
+    hookTimeout: 30_000,
   },
 });

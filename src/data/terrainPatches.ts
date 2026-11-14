@@ -8,6 +8,7 @@ import { azimuthElevationOf, lunarSky, type LatLon } from '../utils/lunarSky';
 import {
   horizonProfile,
   terrainIllumination,
+  type GeneratedHorizon,
   type HorizonProfile,
   type TerrainIllumination,
   type TerrainPatch,
@@ -17,25 +18,48 @@ type Horizons = Readonly<Record<string, HorizonProfile>>;
 
 // The generated file is optional: TEST horizons stay on the laptop that made them (git-ignored)
 // until their source is recorded, and the app works the same without them.
-const generated = import.meta.glob<Horizons>('./terrainHorizons.ts', {
-  eager: true,
-  import: 'TERRAIN_HORIZONS',
-});
+const generated = import.meta.glob<Readonly<Record<string, GeneratedHorizon>>>(
+  './terrainHorizons.ts',
+  {
+    eager: true,
+    import: 'TERRAIN_HORIZONS',
+  },
+);
 
 /**
  * Horizons a build may use: all of them while developing, but never TEST ones (no recorded source)
  * in a production build, even if the local file happens to be there when it is built.
  */
-export function usableHorizons(horizons: Horizons, production: boolean): Horizons {
+export function usableHorizons<T extends { readonly source: string }>(
+  horizons: Readonly<Record<string, T>>,
+  production: boolean,
+): Readonly<Record<string, T>> {
   if (!production) return horizons;
   return Object.fromEntries(
     Object.entries(horizons).filter(([, profile]) => !profile.source.startsWith('TEST')),
   );
 }
 
-export const TERRAIN_HORIZONS: Horizons = usableHorizons(
-  Object.values(generated)[0] ?? {},
-  import.meta.env.PROD,
+/**
+ * A generated horizon as the app uses it: the elevations as a Float32Array and, when the file has
+ * it, `edgeCut` as a Uint8Array of 0/1 (number arrays and typed arrays are both accepted).
+ */
+export function toHorizonProfile(raw: GeneratedHorizon): HorizonProfile {
+  const profile: HorizonProfile = {
+    elevations:
+      raw.elevations instanceof Float32Array ? raw.elevations : Float32Array.from(raw.elevations),
+    radiusM: raw.radiusM,
+    spacingM: raw.spacingM,
+    source: raw.source,
+  };
+  if (raw.edgeCut) profile.edgeCut = Uint8Array.from(raw.edgeCut, (value) => (value ? 1 : 0));
+  return profile;
+}
+
+export const TERRAIN_HORIZONS: Horizons = Object.fromEntries(
+  Object.entries(usableHorizons(Object.values(generated)[0] ?? {}, import.meta.env.PROD)).map(
+    ([siteId, raw]) => [siteId, toHorizonProfile(raw)],
+  ),
 );
 
 export const TERRAIN_PATCHES: Readonly<Record<string, TerrainPatch>> = {};

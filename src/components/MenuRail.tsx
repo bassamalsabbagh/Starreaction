@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { joinClassNames } from '../utils/classNames';
 import styles from './MenuRail.module.css';
 
-export type RailItem = 'sites' | 'mission' | 'compare' | 'lessons' | 'demo' | 'about';
+export type RailItem = 'plan' | 'compare' | 'power' | 'about';
 
 interface MenuRailProps {
   /** The item whose view the left panel shows, or null when it is closed. */
@@ -12,6 +12,8 @@ interface MenuRailProps {
   panelId: string;
   /** How many sites are picked for comparing, shown on Compare. */
   compareCount: number;
+  /** The panel is closed: the logo shows at the top of the rail (open, it is in the panel). */
+  showLogo?: boolean;
 }
 
 const ICON = {
@@ -28,25 +30,12 @@ const ICON = {
 
 const ITEMS: readonly { id: RailItem; label: string; icon: ReactNode; view: boolean }[] = [
   {
-    id: 'mission',
-    label: 'Mission',
+    id: 'plan',
+    label: 'Plan',
     view: true,
     icon: (
       <svg {...ICON}>
         <path d="M6.5 9.5h7l-1.4-4h-4.2zM7.5 9.5l-3 6M12.5 9.5l3 6M10 9.5v4M3 15.5h3.5M13.5 15.5H17" />
-      </svg>
-    ),
-  },
-  {
-    id: 'sites',
-    label: 'Sites',
-    view: true,
-    icon: (
-      <svg {...ICON}>
-        <path d="M7.5 5.5h9M7.5 10h9M7.5 14.5h9" />
-        <circle cx="4" cy="5.5" r="0.9" fill="currentColor" />
-        <circle cx="4" cy="10" r="0.9" fill="currentColor" />
-        <circle cx="4" cy="14.5" r="0.9" fill="currentColor" />
       </svg>
     ),
   },
@@ -62,23 +51,12 @@ const ITEMS: readonly { id: RailItem; label: string; icon: ReactNode; view: bool
     ),
   },
   {
-    id: 'lessons',
-    label: 'Lessons',
+    id: 'power',
+    label: 'Power Lab',
     view: true,
     icon: (
       <svg {...ICON}>
-        <path d="M10 5.5c-1.6-1.2-3.8-1.6-6-1.2v10.5c2.2-.4 4.4 0 6 1.2 1.6-1.2 3.8-1.6 6-1.2V4.3c-2.2-.4-4.4 0-6 1.2zM10 5.5v10.5" />
-      </svg>
-    ),
-  },
-  {
-    id: 'demo',
-    label: 'Demo',
-    view: false,
-    icon: (
-      <svg {...ICON}>
-        <circle cx="10" cy="10" r="6.5" />
-        <path d="M8.5 7.2v5.6l4.4-2.8z" fill="currentColor" stroke="none" />
+        <path d="M11 3 5.5 11H10l-1 6 5.5-8H10z" />
       </svg>
     ),
   },
@@ -96,17 +74,33 @@ const ITEMS: readonly { id: RailItem; label: string; icon: ReactNode; view: bool
   },
 ];
 
-/** Demo and About are actions, not views: they sit apart, at the foot of the rail. */
+/** About is an action, not a view: it sits apart, at the foot of the rail. */
 const FIRST_ACTION = ITEMS.findIndex((item) => !item.view);
 
 /**
  * The menu rail on the far left: one icon with a short label per view. A view item opens its view
  * in the left panel, and closes the panel when it is already showing; the active one carries an
- * orange marker. Demo starts the guided demo; About opens the About window.
+ * orange marker. About opens the About window.
  */
-export function MenuRail({ active, onSelect, panelId, compareCount }: MenuRailProps) {
+export function MenuRail({
+  active,
+  onSelect,
+  panelId,
+  compareCount,
+  showLogo = false,
+}: MenuRailProps) {
   return (
     <nav className={styles.rail} aria-label="Menu" data-tour="rail">
+      {showLogo ? (
+        <img
+          className={styles.mark}
+          src={`${import.meta.env.BASE_URL}starreaction-icon-256.png`}
+          alt="StarReaction"
+          width={32}
+          height={32}
+          decoding="async"
+        />
+      ) : null}
       <ul className={styles.list}>
         {ITEMS.map((item, index) => {
           const on = item.view && active === item.id;
@@ -118,7 +112,6 @@ export function MenuRail({ active, onSelect, panelId, compareCount }: MenuRailPr
                 aria-expanded={item.view ? on : undefined}
                 aria-controls={item.view ? panelId : undefined}
                 aria-haspopup={item.id === 'about' ? 'dialog' : undefined}
-                data-demo-start={item.id === 'demo' ? '' : undefined}
                 onClick={(event) => onSelect(item.id, event.currentTarget)}
               >
                 {item.icon}

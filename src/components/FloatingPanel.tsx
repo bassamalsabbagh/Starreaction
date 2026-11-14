@@ -13,6 +13,8 @@ interface FloatingPanelProps {
   /** Presentation mode: gone, handle included. */
   hidden?: boolean;
   panelRef?: Ref<HTMLDivElement>;
+  /** The product name: shown with its logo, in one row, above the panel's content. */
+  brand?: string;
   children: ReactNode;
 }
 
@@ -28,6 +30,7 @@ export function FloatingPanel({
   wide = false,
   hidden = false,
   panelRef,
+  brand,
   children,
 }: FloatingPanelProps) {
   const shown = open && !hidden;
@@ -59,6 +62,26 @@ export function FloatingPanel({
         inert={!shown}
         aria-hidden={!shown || undefined}
       >
+        {brand ? (
+          <p className={styles.brand}>
+            <img
+              className={styles.mark}
+              src={`${import.meta.env.BASE_URL}starreaction-icon-256.png`}
+              alt=""
+              width={32}
+              height={32}
+            />
+            <span className={styles.brandName}>
+              {brand.startsWith('Star') ? (
+                <>
+                  Star<span className={styles.reaction}>{brand.slice(4)}</span>
+                </>
+              ) : (
+                brand
+              )}
+            </span>
+          </p>
+        ) : null}
         {children}
       </div>
       <button

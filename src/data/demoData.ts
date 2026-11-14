@@ -1,23 +1,20 @@
 /**
- * DEMO DATA - NOT REAL.
+ * DEMO MISSIONS - NOT REAL.
  *
- * Practice-only fixtures that exist so the whole UI can be exercised. Every mission profile, site
- * name, coordinate and threshold below is made up. Nothing here is sourced, and nothing here
- * describes a real lander, mission or place. The UI labels all of it "DEMO". Real data must never
- * be added to this file; it belongs in sourced datasets that reference docs/DATA_SOURCES.md.
+ * Practice-only mission profiles that exist so the whole UI can be exercised. Every mission name
+ * and threshold below is made up. Nothing here is sourced, and nothing here describes a real
+ * lander or mission. The UI labels the missions "DEMO". Real data must never be added to this
+ * file; it belongs in sourced datasets that reference docs/DATA_SOURCES.md.
  *
- * Only the Sun and Earth are real: each site's sunlight, Earth visibility and windows are computed
- * from their actual positions (src/utils/skyVisibility.ts) at these made-up sites, with these
- * made-up minimum heights (docs/LANDER_RULES.md).
+ * The sites are real landings (data/sites.json, src/services/sites.ts), and the Sun and Earth are
+ * real: each site's sunlight, Earth visibility and windows are computed from their actual positions
+ * (src/utils/skyVisibility.ts), with these made-up minimum heights (docs/LANDER_RULES.md).
  */
+import type { Site } from '../services/sites';
 import { bestWindow, type SiteSky } from '../utils/skyVisibility';
-import { tenthsOfDayDown, type TimeRange, type TimeWindowMs } from '../utils/time';
+import { rangeWords, tenthsOfDayDown, type TimeRange, type TimeWindowMs } from '../utils/time';
 
 export const DEMO_LABEL = 'DEMO - NOT REAL';
-
-/** The top bar's "Data: Demo" pill explains itself with this. */
-export const DEMO_NOTICE =
-  'Mission profiles and sites are made up for practice; the Sun and Earth positions are real. Map imagery is a preview, not adopted. Not affiliated with or endorsed by NASA.';
 
 /**
  * What a mission needs from the sky: the Sun high enough for its solar panels, for long enough,
@@ -36,14 +33,6 @@ export interface DemoMission {
   readonly hasRelay: boolean;
   /** Set on a mission the user made ("Add your own mission"): its values are theirs, not DEMO. */
   readonly custom?: boolean;
-}
-
-export interface DemoSite {
-  readonly id: string;
-  readonly name: string;
-  /** Made-up selenographic coordinates (provisional convention, see COORDINATE_CONVENTION). */
-  readonly lat: number;
-  readonly lon: number;
 }
 
 export const DEFAULT_DEMO_MISSION: DemoMission = {
@@ -73,20 +62,6 @@ export const DEMO_MISSIONS: readonly DemoMission[] = [
     daysNeeded: 2,
     hasRelay: false,
   },
-];
-
-export const DEMO_SITES: readonly DemoSite[] = [
-  { id: 'demo-site-alpha', name: 'Demo Site Alpha', lat: 12.4, lon: -31.8 },
-  { id: 'demo-site-bravo', name: 'Demo Site Bravo', lat: -8.2, lon: 45.6 },
-  { id: 'demo-site-charlie', name: 'Demo Site Charlie', lat: 26.9, lon: -64.2 },
-  { id: 'demo-site-delta', name: 'Demo Site Delta', lat: -41.3, lon: 12.7 },
-  { id: 'demo-site-echo', name: 'Demo Site Echo', lat: 3.6, lon: 101.5 },
-  { id: 'demo-site-foxtrot', name: 'Demo Site Foxtrot', lat: -63.9, lon: -128.4 },
-  { id: 'demo-site-golf', name: 'Demo Site Golf', lat: 54.2, lon: 160.3 },
-  { id: 'demo-site-hotel', name: 'Demo Site Hotel', lat: -19.7, lon: -84.9 },
-  // Near the south pole, so the Sun skims the horizon and the Earth dips below it for part of
-  // each month (libration): the conditions the challenge is about.
-  { id: 'demo-site-india', name: 'Demo Site India', lat: -85.5, lon: 31 },
 ];
 
 /**
@@ -120,8 +95,23 @@ export interface SkyAssessment {
   readonly bestWindow: TimeWindowMs | null;
 }
 
-export interface RankedDemoSite {
-  readonly site: DemoSite;
+/** A place in Compare: a past landing, or a point the user typed or clicked. */
+export interface ComparePlace {
+  readonly id: string;
+  readonly name: string;
+  readonly lat: number;
+  readonly lon: number;
+}
+
+/** One Compare column: the place and its checks (a past landing's RankedSite fits). */
+export interface CompareEntry {
+  readonly site: ComparePlace;
+  readonly assessment: SkyAssessment;
+  readonly rank: number | null;
+}
+
+export interface RankedSite {
+  readonly site: Site;
   readonly assessment: SkyAssessment;
   /** 1-based place among suitable sites in the current order; null when not suitable. */
   readonly rank: number | null;
@@ -145,6 +135,7 @@ export function formatShare(pct: number): string {
  */
 export function assessSky(sky: SiteSky, mission: DemoMission, range: TimeRange): SkyAssessment {
   const usableDays = mission.hasRelay ? sky.longestSunlitDays : sky.longestWindowDays;
+  const words = rangeWords(range);
   const checks: SkyCheck[] = [
     {
       id: 'sunlight',
@@ -158,8 +149,8 @@ export function assessSky(sky: SiteSky, mission: DemoMission, range: TimeRange):
       label: 'Comms',
       passes: mission.hasRelay || sky.earthPct > 0,
       detail: mission.hasRelay
-        ? `Relay: no need to see the Earth (Earth up ${formatShare(sky.earthPct)} of the month)`
-        : `Earth at least ${mission.minEarthElevationDeg}° up for ${formatShare(sky.earthPct)} of the month`,
+        ? `Relay: no need to see the Earth (Earth up ${formatShare(sky.earthPct)} ${words.of})`
+        : `Earth at least ${mission.minEarthElevationDeg}° up for ${formatShare(sky.earthPct)} ${words.of}`,
       failTitle: 'No line of sight to Earth',
     },
   ];
@@ -183,13 +174,14 @@ export function assessSky(sky: SiteSky, mission: DemoMission, range: TimeRange):
   };
 }
 
-/** How the Sites list is ordered. */
-export type SiteOrder = 'window' | 'sunlight' | 'earth' | 'name';
+/** How the Sites list is ordered (docs/LANDER_RULES.md, "Date range and hours"). */
+export type SiteOrder = 'window' | 'sunHours' | 'earthHours' | 'bothHours' | 'name';
 
 export const SITE_ORDER_LABEL: Readonly<Record<SiteOrder, string>> = {
   window: 'Longest window',
-  sunlight: 'Most sunlight',
-  earth: 'Most Earth time',
+  sunHours: 'Most hours of Sun',
+  earthHours: 'Most hours of Earth',
+  bothHours: 'Most hours of both',
   name: 'Name',
 };
 
@@ -198,10 +190,12 @@ function orderValue(order: Exclude<SiteOrder, 'name'>, assessment: SkyAssessment
   switch (order) {
     case 'window':
       return assessment.usableDays;
-    case 'sunlight':
-      return assessment.sky.sunPct;
-    case 'earth':
-      return assessment.sky.earthPct;
+    case 'sunHours':
+      return assessment.sky.sunHours;
+    case 'earthHours':
+      return assessment.sky.earthHours;
+    case 'bothHours':
+      return assessment.sky.bothHours;
   }
 }
 
@@ -210,13 +204,13 @@ function orderValue(order: Exclude<SiteOrder, 'name'>, assessment: SkyAssessment
  * not suitable, in the same order, with no number. `sky` holds each site's real Sun and Earth over
  * the range (missing counts as none).
  */
-export function rankDemoSites(
-  sites: readonly DemoSite[],
+export function rankSites(
+  sites: readonly Site[],
   mission: DemoMission,
   sky: ReadonlyMap<string, SiteSky>,
   range: TimeRange,
   order: SiteOrder = 'window',
-): readonly RankedDemoSite[] {
+): readonly RankedSite[] {
   const assessed = sites.map((site) => ({
     site,
     assessment: assessSky(sky.get(site.id) ?? NO_SKY, mission, range),
@@ -238,8 +232,8 @@ export function rankDemoSites(
  * The best site: the suitable one with the longest usable window (ties by name), whatever order
  * the list is shown in; undefined when no site is suitable. "Best" always means this.
  */
-export function bestDemoSite(ranked: readonly RankedDemoSite[]): RankedDemoSite | undefined {
-  let best: RankedDemoSite | undefined;
+export function bestSite(ranked: readonly RankedSite[]): RankedSite | undefined {
+  let best: RankedSite | undefined;
   for (const entry of ranked) {
     if (entry.rank === null) continue;
     const diff = best ? entry.assessment.usableDays - best.assessment.usableDays : 1;
@@ -253,6 +247,9 @@ export function bestDemoSite(ranked: readonly RankedDemoSite[]): RankedDemoSite 
 const NO_SKY: SiteSky = {
   sunPct: 0,
   earthPct: 0,
+  sunHours: 0,
+  earthHours: 0,
+  bothHours: 0,
   longestSunlitDays: 0,
   longestWindowDays: 0,
   windows: [],

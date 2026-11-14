@@ -1,0 +1,94 @@
+/* Night survival: the lander's values with their tags, the verdict, the battery needed here. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-caption);
+}
+
+.lander {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.label {
+  color: var(--color-text-faint);
+  font-weight: 400;
+}
+
+.values {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.row dt {
+  color: var(--color-text-faint);
+}
+
+.row dd {
+  margin: 0;
+}
+
+.value {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.source {
+  margin-left: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-underline-offset: 3px;
+}
+
+.source:hover {
+  color: var(--color-text);
+}
+
+/* A conflict between sources, said where the value is. */
+.note {
+  display: block;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.legend,
+.needed,
+.slope {
+  margin: 0;
+  color: var(--color-text-faint);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.needed {
+  color: var(--color-text-muted);
+}
+
+/* The verdict: in words, the colour only echoes it. */
+.verdict {
+  margin: 0;
+  color: var(--color-text);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict.ok strong {
+  color: var(--color-score-great);
+}
+
+.verdict.fail strong {
+  color: var(--color-score-poor);
+}

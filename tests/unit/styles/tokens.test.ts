@@ -65,3 +65,20 @@ describe('text colours (projector readability, 2026-11-13)', () => {
     expect(block).toMatch(/--font-size-xs:\s*0\.875rem/);
   });
 });
+
+describe('Timeline colours (Phase E, projector-safe)', () => {
+  it('stand out from the panel and the track; Sun and Earth differ in lightness; "both" is told from Sun by its stripes', () => {
+    for (const name of ['color-timeline-both', 'color-timeline-sun', 'color-timeline-earth']) {
+      expect(contrast(token(name), token('color-panel'))).toBeGreaterThanOrEqual(3);
+      expect(contrast(token(name), token('color-timeline-track'))).toBeGreaterThanOrEqual(3);
+    }
+    // Yellow and blue differ in lightness, so they part even without colour vision.
+    expect(
+      contrast(token('color-timeline-sun'), token('color-timeline-earth')),
+    ).toBeGreaterThanOrEqual(1.8);
+    // "Both" carries a stripe pattern that reads at 3:1 within itself.
+    expect(
+      contrast(token('color-timeline-both'), token('color-timeline-both-stripe')),
+    ).toBeGreaterThanOrEqual(3);
+  });
+});

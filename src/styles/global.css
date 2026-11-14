@@ -8,7 +8,13 @@
   --color-text-muted: #a9a8a4;
   /* The one accent: StarReaction orange (the logo). Used sparingly: the selected state, the
      best-match marker, small active details. Never a large fill. */
-  --color-accent: #ffb347;
+  /* The one accent: amber, sampled from the logo (#ffb347, as on the active Top button). Fills use
+     it with --on-accent text (near-black, 10:1); on white, links and focus rings use the darker
+     --accent-text (6.8:1). */
+  --accent: #ffb347;
+  --on-accent: #1a1100;
+  --accent-text: #8a4b00;
+  --color-accent: var(--accent);
   --color-highlight: var(--color-accent);
   /* Focus rings: off-white, so the accent stays rare. */
   --color-focus: var(--color-text);
@@ -16,7 +22,7 @@
 
   /* Workspace additions. Text colours are chosen for WCAG AA (>= 4.5:1) on bg and surfaces. */
   --color-border-strong: #3c3e44;
-  /* Lightened from #8e8d89 (2026-11-13) so the smallest grey text survives a projector; still
+  /* Lightened from #8e8d89 so the smallest grey text survives a projector; still
      below the muted grey, so the order of emphasis is the same. */
   --color-text-faint: #9a9995;
   /* Presentation mode on a projector (App.module.css .presenting): lighter greys. */
@@ -56,7 +62,6 @@
   --color-score-great: #5fd49a;
   --color-score-ok: #f0c75e;
   --color-score-poor: #ff7b72;
-  --color-pin-excluded: #8e8d89;
   --color-pin-text: #0c0d0f;
 
   /* Clock modes and form errors. Live and Simulated always travel with their word. Live is green
@@ -72,6 +77,21 @@
   --color-earth: #9cc3ff;
   /* The ground below the horizon in the horizon view. */
   --color-ground: #1b1c20;
+  /* The light checkerboard under a transparency legend (visibility overlays), so a see-through
+     colour reads as see-through. */
+  --color-checker-light: #e6e4df;
+  --color-checker-dark: #b8b6b1;
+  /* The Compare Timeline's bars: green both up (also striped), yellow Sun only, blue Earth only,
+     the empty track neither. Far apart in lightness as well as hue, for projectors and colour-blind
+     viewers; each state is also given in words. */
+  --color-timeline-both: #3ddc84;
+  --color-timeline-both-stripe: #0d6b3c;
+  --color-timeline-sun: #ffd23f;
+  --color-timeline-earth: #3d8bff;
+  --color-timeline-track: #1f2126;
+  /* Site beacons on the map: green passes every check for the dates checked, red does not. */
+  --color-pin-pass: #5fd49a;
+  --color-pin-fail: #ff7b72;
 
   /* Elevation for things that float over the map; docked chrome casts no shadow. */
   --shadow-tip: 0 2px 8px rgb(0 0 0 / 0.35);
@@ -81,7 +101,7 @@
 
   /* The wordmark (About panel): "Star" in white, "Reaction" in the team's orange. */
   --color-brand-star: #ffffff;
-  --color-brand-reaction: #ffb347;
+  --color-brand-reaction: #c27803;
   /* The zoom readout: three short lines under the map buttons. */
   --map-readout-height: 3.75rem;
   --map-readout-width: 8.75rem;
@@ -91,10 +111,10 @@
   --top-bar-height: 4.25rem;
   /* The menu rail on the far left, and the one floating panel beside it; Compare may be wider. */
   --rail-width: 4rem;
-  --panel-width: 24rem;
+  --panel-width: 28rem;
   --panel-gap: var(--space-3);
   /* The time bar's height, open and folded to a line; overlays above it stack on top. */
-  --time-bar-height: 6rem;
+  --time-bar-height: 6.5rem;
   --time-bar-folded-height: 2.25rem;
   /* The status line (lander, clock, Sun and Earth) just above the time bar. */
   --status-line-height: 2.5rem;
@@ -129,6 +149,34 @@
   /* Floating panels and the toolbar pill. */
   --radius-lg: 12px;
   --radius-pill: 999px;
+
+  /* The light left panel (the wizard and Compare): opaque white, dark text, high
+     contrast. The panel re-points the colour tokens at these, so everything inside follows. */
+  --light-panel-fill: #ffffff;
+  --light-panel-edge: #c4c8cf;
+  --light-text: #111318;
+  --light-text-muted: #3d424b;
+  --light-text-faint: #565c66;
+  --light-border: #d3d6dc;
+  --light-border-strong: #9aa0aa;
+  --light-input: #ffffff;
+  --light-raised: #eef0f3;
+  --light-accent: var(--accent-text);
+  --light-pass: #106b3a;
+  --light-fail: #b3261e;
+  --light-link: var(--accent-text);
+  --light-current: var(--accent);
+  --light-on-current: var(--on-accent);
+  --light-done: color-mix(in srgb, var(--accent) 55%, #ffffff);
+  --light-hover: color-mix(in srgb, var(--accent) 16%, #ffffff);
+  /* The wizard's own roles; outside the light panel they fall back to the dark palette. */
+  --color-wizard-current: var(--color-accent);
+  --color-wizard-on-current: var(--color-on-primary);
+  --color-wizard-done: var(--color-text-faint);
+  --color-wizard-hover: var(--color-surface);
+  --color-input: var(--color-bg);
+  --color-link: var(--color-accent);
+  --font-size-heading: 1.375rem;
 
   color-scheme: dark;
 }
