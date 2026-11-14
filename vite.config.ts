@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react';
 
 // https://vite.dev/config/
 export default defineConfig({
+  // "/" for the dev server and Vercel; GitHub Pages serves the site under "/<repo-name>/" (the
+  // deploy workflow sets BASE_PATH). Every fetch to public/ files uses import.meta.env.BASE_URL.
+  base: process.env.BASE_PATH ?? '/',
   plugins: [react()],
   build: {
     // CesiumJS ships as one large chunk; it is lazy-loaded (src/app/App.tsx), so the first paint
