@@ -25,6 +25,7 @@ import {
   SOUTH_POLE_VIEW,
   offsetLonLat,
   southPoleView,
+  POLE_TILT_DEG,
 } from '../../../../src/features/lunar-map/cameraControls';
 
 describe('southPoleView', () => {
@@ -349,5 +350,17 @@ describe('offsetLonLat', () => {
     const from = { lon: rad(30), lat: rad(-40) };
     const to = offsetLonLat(from, 25_000, rad(250));
     expect(groundDistanceM(from, to)).toBeCloseTo(25_000, 3);
+  });
+});
+
+describe('Top and 3D pole views', () => {
+  it('looks almost straight down for Top and 45° for 3D, both over the pole', () => {
+    const top = southPoleView(900, 1200, 800, NO_INSETS, POLE_TILT_DEG.top);
+    const tilted = southPoleView(900, 1200, 800, NO_INSETS, POLE_TILT_DEG['3d']);
+    expect((top.pitch * 180) / Math.PI).toBeLessThan(-89);
+    // Tilted 45°, a little steeper than that: the camera's own pitch adds the Moon's curvature.
+    expect((tilted.pitch * 180) / Math.PI).toBeGreaterThan(-65);
+    expect((top.lat * 180) / Math.PI).toBeLessThan(-89);
+    expect(tilted.height).toBeGreaterThan(0);
   });
 });

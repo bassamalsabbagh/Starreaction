@@ -22,3 +22,4 @@ docs/LAYER_CHECK.md
 # The team's full-cap visibility prototype (generated JSON grids, copied as supplied)
 public/data/visibility-cap/
 src/features/lunar-map/visibility/
+public/power-lab.html

@@ -2,7 +2,6 @@
 
 **Event:** NASA Space Apps Challenge 2026, Amman — November 14–15, 2026
 **Team size:** 4
-**Last updated:** 2026-10-23
 
 ## Vision
 
@@ -12,7 +11,9 @@ An interactive, Google Maps-style lunar mission browser. Users can:
 2. Select a CLPS lander and see which candidate sites are compatible with it.
 3. Compare candidate sites side by side.
 4. Understand site rankings **and the reasoning behind them**.
-5. Explore documented mission risks and outcomes, such as Intuitive Machines IM-1 and IM-2.
+5. ~~Explore documented mission risks and outcomes (the Lessons page).~~ Removed 2026-11-14 by
+   team decision; the past landings (IM-1, IM-2, Blue Ghost 1, Chandrayaan-3) remain as
+   "Past landings" in the wizard's Location step, with their sourced facts under More details.
 
 The vision is the direction, not a commitment to build everything. Scope is cut to what can be
 demonstrated reliably.
@@ -26,14 +27,14 @@ demonstrated reliably.
 
 ## Milestones (proposed — adjust as a team)
 
-| #   | Target date   | Milestone                                                                                       | Status  |
-| --- | ------------- | ----------------------------------------------------------------------------------------------- | ------- |
-| M0  | 2026-10-23    | Project foundation: tooling, structure, docs, agents, starter page                              | Done    |
-| M1  | 2026-10-31    | Decide lunar basemap + map projection; research and cite initial mission set (incl. IM-1, IM-2) | Pending |
-| M2  | 2026-11-07    | Map MVP: lunar basemap renders, sourced landing locations as markers, mission detail panel      | Pending |
-| M3  | 2026-11-11    | Lander selection + site comparison; ranking criteria documented in `LANDER_RULES.md` and coded  | Pending |
-| M4  | 2026-11-13    | Feature freeze, QA pass, demo rehearsal (`DEMO_SCRIPT.md`)                                      | Pending |
-| M5  | 2026-11-14/15 | Hackathon: polish, presentation, submission                                                     | Pending |
+| #   | Milestone                                                                                       | Status  |
+| --- | ----------------------------------------------------------------------------------------------- | ------- |
+| M0  | Project foundation: tooling, structure, docs, agents, starter page                              | Done    |
+| M1  | Decide lunar basemap + map projection; research and cite initial mission set (incl. IM-1, IM-2) | Pending |
+| M2  | Map MVP: lunar basemap renders, sourced landing locations as markers, mission detail panel      | Pending |
+| M3  | Lander selection + site comparison; ranking criteria documented in `LANDER_RULES.md` and coded  | Pending |
+| M4  | Feature freeze, QA pass, demo rehearsal (`DEMO_SCRIPT.md`)                                      | Pending |
+| M5  | Hackathon: polish, presentation, submission                                                     | Pending |
 
 ## Suggested team roles (4 people)
 
@@ -47,17 +48,17 @@ demonstrated reliably.
 1. **Lunar basemap source.** Candidates to investigate include NASA's Moon Trek and USGS
    Astrogeology lunar mosaics. Each must be verified for tile availability, projection, usage terms
    and offline/demo reliability.
-   - **Status (2026-10-24):** candidates researched and recorded in `DATA_SOURCES.md` as
+   - **Status:** candidates researched and recorded in `DATA_SOURCES.md` as
      **candidate — not adopted**. **No basemap is adopted.** Licence, attribution, CORS and polar
      coverage are still unresolved (see the "Unresolved questions" list there and KI-008).
 2. **Map projection / Leaflet CRS.** Leaflet's default CRS (EPSG:3857 Web Mercator) assumes Earth.
    The CRS must match the chosen lunar tile set (for example an equirectangular/simple-cylindrical
    grid). Coordinates must be stored as selenographic latitude/longitude with the convention
    documented.
-   - **Superseded (2026-10-24, user-approved):** the map engine is now **CesiumJS**, not Leaflet,
+   - **Superseded (user-approved):** the map engine is now **CesiumJS**, not Leaflet,
      so the bullets below describe the earlier Leaflet setup.
      - **Shape:** Cesium's Moon ellipsoid (`Ellipsoid.MOON`).
-     - **Views (updated 2026-10-25):** one 3D view with the camera held straight down, so it zooms
+     - **Views:** one 3D view with the camera held straight down, so it zooms
        continuously from the whole Moon to a flat-looking close-up (500 m minimum height). The
        earlier flat Web Mercator view and its 3D/flat toggle were removed. No Cesium ion.
      - **Imagery:** Moon Trek WMTS tiles, read with a geographic tiling scheme. Still a preview, not
@@ -65,12 +66,12 @@ demonstrated reliably.
      - **Stored coordinates are unchanged:** latitude/longitude in the provisional convention.
      - **Leaflet removed:** the Earth-radius limitation (KI-007) no longer applies, and Leaflet is
        uninstalled. Cost: KI-011.
-   - **Interim decision (2026-10-24, provisional):** until a basemap is verified, the planned map
+   - **Interim decision (provisional):** until a basemap is verified, the planned map
      (implementation step 3, not yet built) is a tile-free Leaflet viewport with a coordinate grid,
      with no tiles and no tile requests. Coordinates use latitude −90° to +90° and longitude −180° to
      +180°, east-positive (`COORDINATE_CONVENTION` in `src/utils/selenographic.ts`). This convention
      **must be confirmed against the eventual data sources** before real data is added (see KI-006).
-   - **CRS decision (2026-10-24, provisional):** the viewport will use Leaflet's `L.CRS.EPSG4326`,
+   - **CRS decision (provisional):** the viewport will use Leaflet's `L.CRS.EPSG4326`,
      not `L.CRS.Simple`.
      - **Why:** it is an equirectangular longitude/latitude projection. Its tile layout (two
        256 × 256 tiles at zoom 0, origin (−180, +90); `DATA_SOURCES.md` SRC-016) matches the

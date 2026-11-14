@@ -58,3 +58,10 @@ describe('compareVerdict', () => {
     );
   });
 });
+
+describe('compareLine (the one line above the Compare cards)', () => {
+  it('needs two places', async () => {
+    const { compareLine } = await import('../../../src/data/compareVerdict');
+    expect(compareLine([], false)).toBeNull();
+  });
+});

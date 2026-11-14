@@ -20,12 +20,31 @@
   ],
   "interval_minutes": 10,
   "disc_samples": 128,
-  "colors": {
+  "original_package_colors": {
     "0": "#081246",
     "0.25": "#0073d2",
     "0.5": "#00cdaf",
     "0.75": "#f5da2d",
     "1": "#ff5b18"
+  },
+  "colors": {
+    "sun": {
+      "0": "#7a3d00",
+      "0.5": "#ff8a00",
+      "1": "#ffd84d"
+    },
+    "earth": {
+      "0": "#0b2470",
+      "0.5": "#00c4e0",
+      "1": "#d6f2ff"
+    }
+  },
+  "colors_note": "Display only: per-target palettes of the redrawn PNGs (linear between the stops), from src/data/visibility/palette.json. Values never come from colours.",
+  "alpha": {
+    "value_zero": 0,
+    "value_min": 0.3,
+    "value_max": 1,
+    "rule": "PNG alpha = 0 where the value is 0 (fully transparent); otherwise 0.3 + 0.7 x value (so 0.3 at the smallest non-zero value and 1 at 1). On the map this is multiplied by the layer opacity the app sets."
   },
   "limitations": [
     "9.6 km map spacing; 200 m terrain locally, 960 m exterior supporting terrain.",

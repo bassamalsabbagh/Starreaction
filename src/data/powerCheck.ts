@@ -16,7 +16,7 @@ export const BATTERY_WH_PER_KG = 143;
 
 export type PanelType = 'flat' | 'standing';
 
-/** Slider ranges and their teaching defaults (agreed 2026-11-13; not mission data). */
+/** Slider ranges and their teaching defaults (agreed; not mission data). */
 export const POWER_SLIDERS = {
   areaM2: { min: 0.5, max: 4, step: 0.1, initial: 1 },
   heaterW: { min: 5, max: 100, step: 1, initial: 20 },

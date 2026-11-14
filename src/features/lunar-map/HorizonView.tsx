@@ -1,5 +1,5 @@
 import { useId, useMemo } from 'react';
-import { siteHourlySky, type HorizonsSeries } from '../../services/horizonsData';
+import { siteSamples, type HorizonsSeries } from '../../services/horizonsData';
 import { azimuthElevationOf, type LatLon } from '../../utils/lunarSky';
 import type { BodyNow } from '../../utils/riseSet';
 import { edgeCutRuns, type AzimuthRun, type HorizonProfile } from '../../utils/terrainShadow';
@@ -62,7 +62,7 @@ export function HorizonView({
   const clipId = useId();
 
   const paths = useMemo(() => {
-    const { samples } = siteHourlySky(series, place, range);
+    const { samples } = siteSamples(series, place, range);
     const of = (pick: 'sun' | 'earth'): SkyPoint[] =>
       samples.map((sample) => azimuthElevationOf(sample[pick], place));
     return { sun: of('sun'), earth: of('earth') };

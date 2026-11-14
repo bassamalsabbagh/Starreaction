@@ -53,7 +53,7 @@
 
 .axis {
   fill: var(--color-text-muted);
-  /* 12px (was 11px): the app's smallest text, raised for projectors (2026-11-13). */
+  /* 12px (was 11px): the app's smallest text, raised for projectors. */
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }

@@ -112,3 +112,21 @@
 .fail {
   color: var(--color-score-poor);
 }
+
+.design {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.design:hover {
+  filter: brightness(1.06);
+}

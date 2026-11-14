@@ -342,11 +342,11 @@ describe('siteSky with a terrain horizon', () => {
     const ground = horizon((azimuth) => (azimuth < 180 ? 3 : -90));
     const result = siteSky(samples, SOUTH_POLE_SITE, low, NOV_15, ground);
     const inRange = samples.filter((s) => s.t >= NOV_15.start && s.t < NOV_15.end);
-    // The minimum on the centre; the terrain against the upper limb.
+    // The upper limb against the higher of the minimum and the terrain in its direction.
     const sunUp = inRange.filter((s) => {
       const { azimuth, elevation } = azimuthElevationOf(s.sun, SOUTH_POLE_SITE);
       const radius = angularRadiusDeg(SUN_RADIUS_KM, distanceFromSite(s.sun, SOUTH_POLE_SITE));
-      return elevation >= low.minSunElevationDeg && elevation + radius > horizonAt(ground, azimuth);
+      return elevation + radius > Math.max(low.minSunElevationDeg, horizonAt(ground, azimuth));
     }).length;
     expect(result.sunPct).toBeCloseTo((sunUp / inRange.length) * 100, 6);
     expect(result.sunPct).toBeLessThanOrEqual(smooth.sunPct);
@@ -399,13 +399,17 @@ describe('upTest (docs/LANDER_RULES.md, "Is it up: the upper limb")', () => {
     expect(up(at(-0.4, AU), -1, SUN_RADIUS_KM)).toBe(false);
   });
 
-  it('keeps the mission’s minimum on the centre', () => {
+  it('tests the mission’s minimum on the upper limb too, so a 0° minimum is exactly "up"', () => {
     const up = upTest(site);
-    // The limb is above 0° but the centre is below a 0° minimum.
-    expect(up(at(-0.1, AU), 0, SUN_RADIUS_KM)).toBe(false);
-    // The limb is above 5° but the centre is not.
-    expect(up(at(4.9, AU), 5, SUN_RADIUS_KM)).toBe(false);
-    expect(up(at(5.01, AU), 5, SUN_RADIUS_KM)).toBe(true);
+    // The centre just below 0°, the limb above it: up, also for a 0° minimum (since 2026-11-14).
+    expect(up(at(-0.1, AU), 0, SUN_RADIUS_KM)).toBe(true);
+    expect(up(at(-0.3, AU), 0, SUN_RADIUS_KM)).toBe(false);
+    // A 5° minimum: the limb must reach 5° (the Sun's radius is about 0.27°).
+    expect(up(at(4.8, AU), 5, SUN_RADIUS_KM)).toBe(true);
+    expect(up(at(4.7, AU), 5, SUN_RADIUS_KM)).toBe(false);
+    // The Earth's radius from the Moon is about 0.95°.
+    expect(up(at(-0.9, 384_400), 0, 6_378.137)).toBe(true);
+    expect(up(at(-1.0, 384_400), 0, 6_378.137)).toBe(false);
   });
 
   it('tests the upper limb against a terrain horizon', () => {
@@ -419,5 +423,37 @@ describe('upTest (docs/LANDER_RULES.md, "Is it up: the upper limb")', () => {
     // Limb at 2.0065° and 1.9965° behind a 2° ridge.
     expect(up(at(1.74, AU), 1, SUN_RADIUS_KM)).toBe(true);
     expect(up(at(1.73, AU), 1, SUN_RADIUS_KM)).toBe(false);
+  });
+});
+
+describe('samples of different lengths (10-minute Horizons steps, hourly engine)', () => {
+  const MIN10 = 10 * 60_000;
+  const range = { start: Date.UTC(2026, 11, 12), end: Date.UTC(2026, 11, 13) };
+  // The engine's hourly sky, split into six 10-minute samples each with the same vectors.
+  const tenMinute = hourlySky(range).flatMap((sample) =>
+    Array.from({ length: 6 }, (_, i) => ({ ...sample, t: sample.t + i * MIN10, stepMs: MIN10 })),
+  );
+
+  it('adds up hours, shares and stretches from each sample’s own length', () => {
+    const site = { lat: -84.7906, lon: 29.1957 };
+    const hourly = siteSky(hourlySky(range), site, THRESHOLDS, range);
+    const tens = siteSky(tenMinute, site, THRESHOLDS, range);
+    // The same sky in six pieces an hour: the same hours, shares and longest stretches.
+    expect(tens.sunHours).toBeCloseTo(hourly.sunHours, 9);
+    expect(tens.earthHours).toBeCloseTo(hourly.earthHours, 9);
+    expect(tens.bothHours).toBeCloseTo(hourly.bothHours, 9);
+    expect(tens.sunPct).toBeCloseTo(hourly.sunPct, 9);
+    expect(tens.longestSunlitDays).toBeCloseTo(hourly.longestSunlitDays, 9);
+    expect(tens.longestWindowDays).toBeCloseTo(hourly.longestWindowDays, 9);
+  });
+
+  it('counts a 10-minute sample as a sixth of an hour of darkness', () => {
+    const site = { lat: -89.9, lon: 0 };
+    const dark = longestDarkHours(tenMinute, site, range);
+    const hourly = longestDarkHours(hourlySky(range), site, range);
+    expect(dark.hours).toBeCloseTo(hourly.hours, 9);
+    // One dark 10-minute sample on its own is 1/6 h (the Sun far below: +z at the south pole).
+    const sunDown = tenMinute.map((sample) => ({ ...sample, sun: [0, 0, 1e8] as const }));
+    expect(longestDarkHours(sunDown.slice(0, 1), site, range).hours).toBeCloseTo(1 / 6, 9);
   });
 });

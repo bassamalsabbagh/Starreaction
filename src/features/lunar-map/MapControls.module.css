@@ -61,3 +61,10 @@
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   color: var(--color-accent);
 }
+
+/* Top and 3D: short words in place of icons. */
+.word {
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}

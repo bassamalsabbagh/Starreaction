@@ -11,6 +11,7 @@ import type { ImageryStatus } from '../../src/features/lunar-map/mapLabels';
 import type { FlyRequest } from '../../src/features/lunar-map/MoonGlobe';
 
 interface MoonGlobeProps {
+  layerShadeCutZ?: number;
   rankedSites: readonly RankedSite[];
   selectedSiteId: string | null;
   hoveredSiteId: string | null;
@@ -55,11 +56,12 @@ export function MoonGlobe({
   onToggleLayers,
   layersOpen = false,
   onHoverGround,
+  layerShadeCutZ,
 }: MoonGlobeProps) {
   const noop = () => undefined;
   // The camera stand-in: counts whole-Moon calls and remembers the view it was asked to restore.
   const [wholeCount, setWholeCount] = useState(0);
-  const [view, setView] = useState('start');
+  const [view, setView] = useState('top');
   useEffect(() => {
     if (!controllerRef) return undefined;
     controllerRef.current = {
@@ -67,7 +69,7 @@ export function MoonGlobe({
         setWholeCount((count) => count + 1);
         setView('whole');
       },
-      showSouthPole: () => setView('south-pole'),
+      showSouthPole: (mode = '3d') => setView(mode),
       saveView: () => view,
       restoreView: (saved) => setView(`restored:${String(saved)}`),
     };
@@ -86,6 +88,7 @@ export function MoonGlobe({
         flyRequest?.point ? `${flyRequest.point.lat},${flyRequest.point.lon}` : 'none'
       }
       data-picked={pickedPoint ? `${pickedPoint.lat},${pickedPoint.lon}` : 'none'}
+      data-shade-cut={layerShadeCutZ ?? 'none'}
       data-layers={
         mapLayers
           .filter((layer) => layer.visible)
@@ -99,7 +102,8 @@ export function MoonGlobe({
           onZoomIn={noop}
           onZoomOut={noop}
           onWholeMoon={noop}
-          onSouthPole={() => controllerRef?.current?.showSouthPole()}
+          poleMode={view === '3d' ? '3d' : 'top'}
+          onPoleMode={(mode) => setView(mode)}
           showGrid={showGrid}
           onShowGridChange={onShowGridChange}
           onPresent={onPresent}

@@ -31,7 +31,7 @@ Also check once: the **Edit** button opens the Mission form with the same values
 the network off, the box says "The assistant isn't available right now" and the form still works;
 and the read-back appears within about 20 seconds.
 
-## Questions (added 2026-11-12; more 2026-11-13)
+## Questions
 
 The app answers these itself (LANDER_RULES, assistant rule 9). The site and window come from the
 same checks as the Sites list, so compare with the list or a site's Other dates, not with fixed

@@ -1,14 +1,17 @@
 import type { ReactNode } from 'react';
 import { Tooltip } from '../../components/Tooltip';
 import { joinClassNames } from '../../utils/classNames';
+import type { PoleMode } from './cameraControls';
 import styles from './MapControls.module.css';
 
 interface MapControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onWholeMoon: () => void;
-  /** The tilted view over the south pole, where the polar sites fill the screen. */
-  onSouthPole?: () => void;
+  /** Which south-pole view is up: Top (straight down, the default) or 3D (tilted). */
+  poleMode?: PoleMode;
+  /** Flies to the Top or 3D view of the south pole. */
+  onPoleMode?: (mode: PoleMode) => void;
   showGrid: boolean;
   onShowGridChange: (show: boolean) => void;
   /** Presentation mode: just the Moon, the time bar and a small site label. */
@@ -68,7 +71,8 @@ export function MapControls({
   onZoomIn,
   onZoomOut,
   onWholeMoon,
-  onSouthPole,
+  poleMode = 'top',
+  onPoleMode,
   showGrid,
   onShowGridChange,
   onPresent,
@@ -96,18 +100,25 @@ export function MapControls({
           <circle cx="12.2" cy="12" r="0.9" />
         </svg>
       </IconButton>
-      {onSouthPole ? (
-        <IconButton
-          label="South pole"
-          tip="South pole: tilted, so the polar sites fill the screen"
-          onClick={onSouthPole}
-        >
-          <svg {...ICON_PROPS}>
-            <circle cx="10" cy="10" r="6.5" />
-            <path d="M4.6 13.2c3.2 1.4 7.6 1.4 10.8 0" />
-            <circle cx="10" cy="16.5" r="0.9" fill="currentColor" />
-          </svg>
-        </IconButton>
+      {onPoleMode ? (
+        <>
+          <IconButton
+            label="Top"
+            tip="Top: straight down over the south pole, like a map"
+            onClick={() => onPoleMode('top')}
+            pressed={poleMode === 'top'}
+          >
+            <span className={styles.word}>Top</span>
+          </IconButton>
+          <IconButton
+            label="3D"
+            tip="3D: the same spot, tilted so the horizon and the Sun's angle show"
+            onClick={() => onPoleMode('3d')}
+            pressed={poleMode === '3d'}
+          >
+            <span className={styles.word}>3D</span>
+          </IconButton>
+        </>
       ) : null}
       <IconButton
         label="Latitude/longitude grid"

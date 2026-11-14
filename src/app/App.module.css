@@ -3,7 +3,7 @@
    the left panel and the right icon column cover. The Moon itself stays centred. */
 .shell {
   /* The rail's edge, the left panel's (the rail's when it is closed) and the right column's. */
-  --rail-edge: calc(var(--panel-gap) + var(--rail-width));
+  --rail-edge: var(--rail-width);
   --map-inset-left: var(--rail-edge);
   --map-inset-right: calc(var(--panel-gap) + var(--map-control-size) + 2 * var(--space-1) + 2px);
   /* Compare: wider than the other panels, still leaving the Moon room. */
@@ -32,17 +32,17 @@
   background: var(--color-space);
 }
 
+/* The left panel is flush with the left edge and runs the full height, beside the rail: the map
+   is what is left of it. */
 .panelOpen {
   --map-inset-left: calc(
-    var(--rail-edge) + var(--space-2) +
-      min(var(--panel-width), calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem))
+    var(--rail-edge) + min(var(--panel-width), calc(100vw - var(--rail-width) - 2.5rem))
   );
 }
 
 .panelWide {
   --map-inset-left: calc(
-    var(--rail-edge) + var(--space-2) +
-      min(var(--compare-width), calc(100vw - var(--rail-width) - 3 * var(--panel-gap) - 2.5rem))
+    var(--rail-edge) + min(var(--compare-width), calc(100vw - var(--rail-width) - 2.5rem))
   );
 }
 
@@ -55,11 +55,10 @@
   );
 }
 
+/* Closed: no bar and no status line; the Time button sits beside Layers. */
 .timeBarFolded {
-  --time-bar-shown: var(--time-bar-folded-height);
-  --bottom-stack: calc(
-    var(--space-4) + var(--time-bar-folded-height) + var(--space-2) + var(--status-line-height)
-  );
+  --time-bar-shown: 0px;
+  --bottom-stack: var(--space-4);
 }
 
 .workspace {
@@ -87,6 +86,7 @@
    appears (switching views). Reduced motion: at once. */
 .view {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
@@ -133,7 +133,7 @@
 
 .middleBottom {
   right: calc(var(--panel-gap) + var(--map-readout-width) + var(--space-2));
-  left: calc(var(--rail-edge) + var(--space-2));
+  left: calc(var(--map-inset-left) + var(--space-2));
   bottom: var(--space-4);
   gap: var(--space-2);
 }
@@ -143,14 +143,13 @@
   width: 100%;
 }
 
-/* The visible map area, for framing the whole Moon: the full width (the Moon stays centred,
-   whatever panel is open), above the time bar. */
+/* The visible map area, for framing the Moon: beside the left panel, above the time bar. */
 .viewArea {
   position: absolute;
   top: var(--top-bar-height);
   right: 0;
   bottom: var(--bottom-stack);
-  left: 0;
+  left: var(--map-inset-left);
   visibility: hidden;
   pointer-events: none;
 }
@@ -158,10 +157,10 @@
 .keyHint {
   margin: 0;
   padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--light-panel-edge);
   border-radius: var(--radius-pill);
-  background: var(--color-panel);
-  color: var(--color-text-muted);
+  background: var(--light-panel-fill);
+  color: var(--light-text-muted);
   font-size: var(--font-size-caption);
   box-shadow: var(--shadow-float);
 }
@@ -201,7 +200,7 @@
 
   .middleBottom {
     right: calc(var(--space-2) + var(--map-readout-width) + var(--space-2));
-    left: calc(var(--rail-edge) + var(--space-2));
+    left: calc(var(--map-inset-left) + var(--space-2));
   }
 }
 
@@ -250,7 +249,7 @@
   --map-inset-left: 0px;
   --map-inset-right: 0px;
 
-  /* Projector readability (2026-11-13): the small text steps up a size and the greys lighten, so
+  /* Projector readability: the small text steps up a size and the greys lighten, so
      the time bar and the site label read from the back of a room. Tokens only, same layout. */
   --font-size-xs: 0.875rem;
   --font-size-caption: 0.9375rem;
@@ -333,7 +332,7 @@
 /* Narrow screens: the panel would leave no room beside it, so the caption keeps the width. */
 @media (max-width: 899px) {
   .middleCaption {
-    left: calc(var(--rail-edge) + var(--space-2));
+    left: calc(var(--map-inset-left) + var(--space-2));
   }
 }
 
@@ -387,18 +386,171 @@
   text-decoration-color: var(--color-text);
 }
 
-/* The map layers panel: beside the map's icon column, below the top row, above the time bar. */
+/* Layers: a square button at the map's bottom left; the tiles open above it, clear of the side
+   panel's 24 px handle. */
 .layersLayer {
   position: absolute;
   top: calc(var(--top-bar-height) + var(--space-3));
-  right: calc(var(--map-inset-right) + var(--space-2));
   bottom: calc(var(--bottom-stack) + var(--space-3));
+  left: calc(var(--map-inset-left) + 24px + var(--space-2));
   z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.layersRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.layersButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 4rem;
+  height: 4rem;
+  border: 1px solid var(--light-panel-edge);
+  border-radius: var(--radius-md);
+  background: var(--light-panel-fill);
+  box-shadow: var(--shadow-float);
+  color: var(--light-text);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.layersButton[aria-expanded='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, #ffffff);
+  color: var(--light-text);
+}
+
+.layersLayer > * {
+  pointer-events: auto;
+}
+
+/* Off the Results step there is no status line or time bar: the map uses the room. */
+.noTimeBar {
+  --bottom-stack: var(--space-4);
+}
+
+.resultAction {
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.resultAction:hover {
+  background: var(--color-wizard-hover);
+}
+
+.delayNote {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
+.stepNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.compareAdd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.compareRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.compareAddLabel {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.compareChip {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.compareChip[aria-pressed='true'] {
+  border-color: var(--color-wizard-current);
+  background: var(--color-wizard-current);
+  color: var(--color-wizard-on-current);
+}
+
+.compareChip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Narrow screens: Layers starts past the side panel's handle (24 px) and sits above it, so neither
+   the rail nor the handle covers a control. */
+@media (max-width: 899px) {
+  .layersLayer {
+    left: calc(var(--rail-edge) + var(--space-2) + 24px + var(--space-2));
+    z-index: 40;
+  }
+}
+
+/* Phones: the time bar takes the full width beside the rail (the zoom readout gives way). */
+@media (max-width: 599px) {
+  .middleBottom {
+    right: var(--space-2);
+  }
+}
+
+/* Phones: the status line wraps to up to three lines, so the stack above the time bar (the Layers
+   button, the panel's lower edge) leaves room for it. */
+@media (max-width: 599px) {
+  .shell {
+    --status-line-height: 5.25rem;
+  }
+}
+
+/* "More details": beside the wizard, below the top row, above the time bar. */
+.detailsLayer {
+  position: absolute;
+  top: var(--top-bar-height);
+  bottom: calc(var(--bottom-stack) + var(--space-3));
+  left: calc(var(--map-inset-left) + 24px + var(--space-2));
+  z-index: 32;
   display: flex;
   align-items: flex-start;
   pointer-events: none;
 }
 
-.layersLayer > * {
+.detailsLayer > * {
   pointer-events: auto;
 }

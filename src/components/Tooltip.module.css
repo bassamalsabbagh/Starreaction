@@ -9,10 +9,10 @@
   width: max-content;
   max-width: 18rem;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--light-panel-edge);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--light-panel-fill);
+  color: var(--light-text);
   font-size: var(--font-size-caption);
   font-weight: 400;
   letter-spacing: normal;

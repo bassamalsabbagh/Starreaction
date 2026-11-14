@@ -1,16 +1,17 @@
 /**
- * When the Sun and Earth are up at a site over a time range: hourly samples of the real geometry
+ * When the Sun and Earth are up at a site over a time range: samples of the real geometry
  * (src/utils/lunarSky.ts) turned into shares of the range and into landing windows. Pure, no
  * React; the app computes it when the range, the lander or the site list changes, never per tick.
  *
- * Each hourly sample stands for the hour that starts there, so windows have hour resolution.
+ * Each sample stands for the stretch that starts there: an hour from our engine, or the JPL
+ * Horizons files' 10 minutes at the fixed sites (`stepMs`), so hours and windows add up the
+ * samples' own lengths.
  * Windows are found over a wider span than the range (WINDOW_MARGIN_MS each side), so a window
  * that runs past the range's edge keeps its true start and end; the shares use the range only.
  */
 import {
   EARTH_RADIUS_KM,
   SUN_RADIUS_KM,
-  aboveHorizonTest,
   azimuthElevationOf,
   lunarSky,
   upperLimbTest,
@@ -24,8 +25,15 @@ import { DAY_MS, HOUR_MS, type TimeRange, type TimeWindowMs } from './time';
 export const WINDOW_MARGIN_MS = 15 * DAY_MS;
 
 export interface SkySample extends LunarSky {
-  /** Start of the hour, UTC ms. */
+  /** Start of the stretch this sample stands for, UTC ms. */
   t: number;
+  /** How long it stands for, ms: an hour unless given (10 minutes for JPL Horizons samples). */
+  stepMs?: number;
+}
+
+/** A sample's length: its own step, or an hour. */
+export function sampleMs(sample: Pick<SkySample, 'stepMs'>): number {
+  return sample.stepMs ?? HOUR_MS;
 }
 
 /** The minimum elevations that count as "up" (degrees above a smooth horizon), and whether the
@@ -37,11 +45,11 @@ export interface SkyThresholds {
 }
 
 export interface SiteSky {
-  /** Share of the range with the Sun at or above the minimum, 0–100. */
+  /** Share of the range with the Sun up for the mission, 0–100. */
   sunPct: number;
-  /** Share of the range with the Earth at or above the minimum, 0–100. */
+  /** Share of the range with the Earth up for the mission, 0–100. */
   earthPct: number;
-  /** Hours in the range with the Sun up: one per hourly sample ("Date range and hours"). */
+  /** Hours in the range with the Sun up: the samples' lengths added up ("Date range and hours"). */
   sunHours: number;
   /** Hours in the range with the Earth up. */
   earthHours: number;
@@ -169,15 +177,15 @@ export function longestDarkHours(
       return;
     }
     if (run === 0) runFromStart = index === 0;
-    run += 1;
+    run += sampleMs(sample);
     const touches = runFromStart || index === inRange.length - 1;
     if (run > longest || (run === longest && touches)) {
       longest = run;
       longestTouchesEdge = touches;
     }
   });
-  // One sample per hour, so the run's length is its hours.
-  return { hours: longest, atLeast: longest > 0 && longestTouchesEdge };
+  // The samples' own lengths added up (an hour each from the engine, 10 minutes from Horizons).
+  return { hours: longest / HOUR_MS, atLeast: longest > 0 && longestTouchesEdge };
 }
 
 /** The span to sample for a range: the range plus the window margin on each side. */
@@ -186,24 +194,32 @@ export function sampledSpan(range: TimeRange): TimeRange {
 }
 
 /**
- * The checks' "up" test for a body (radius `radiusKm`) seen from a site: its upper limb above the
- * horizon, the smooth 0° one or, with a terrain horizon, the terrain in its direction
- * (docs/LANDER_RULES.md, "Is it up: the upper limb" and "Terrain horizon"); and its centre at or
- * above the mission's minimum height, which stays on the centre. Every check, share, hour and the
- * Timeline use this one test.
+ * The checks' "up" test for a body (radius `radiusKm`) seen from a site: elevation + angular
+ * radius (asin(R ÷ distance)) above the horizon, the smooth 0° one or, with a terrain horizon, the
+ * terrain in its direction; a mission's minimum height is a height the upper limb must clear too,
+ * so a minimum of 0° means exactly "up" (docs/LANDER_RULES.md, "Is it up: the upper limb", changed
+ * 2026-11-14). Every check, share, hour and the Timeline use this one test.
  */
 export function upTest(
   site: LatLon,
   terrain: HorizonProfile | null = null,
 ): (target: LunarSky['sun'], minElevationDeg: number, radiusKm: number) => boolean {
-  const centreAtLeast = aboveHorizonTest(site);
   const limbUp = upperLimbTest(site);
   return (target, minElevationDeg, radiusKm) => {
-    if (!centreAtLeast(target, minElevationDeg)) return false;
-    if (!terrain) return limbUp(target, radiusKm);
-    const { azimuth } = azimuthElevationOf(target, site);
-    return limbUp(target, radiusKm, horizonAt(terrain, azimuth));
+    const horizon = terrain ? horizonAt(terrain, azimuthElevationOf(target, site).azimuth) : 0;
+    return limbUp(target, radiusKm, Math.max(horizon, minElevationDeg));
   };
+}
+
+/** The longest unbroken stretch of `true` among samples, in ms (each sample its own length). */
+function longestRunMs(samples: readonly SkySample[], flags: readonly boolean[]): number {
+  let longest = 0;
+  let run = 0;
+  samples.forEach((sample, index) => {
+    run = flags[index] ? run + sampleMs(sample) : 0;
+    if (run > longest) longest = run;
+  });
+  return longest;
 }
 
 /**
@@ -224,17 +240,20 @@ export function siteSky(
   let sunUp = 0;
   let earthUp = 0;
   let bothUp = 0;
+  const rangeSamples: SkySample[] = [];
   const sunInRange: boolean[] = [];
   const windowInRange: boolean[] = [];
-  const windowHours = samples.map((sample) => {
+  const windowFlags = samples.map((sample) => {
     const sun = above(sample.sun, thresholds.minSunElevationDeg, SUN_RADIUS_KM);
     const earth = above(sample.earth, thresholds.minEarthElevationDeg, EARTH_RADIUS_KM);
     const window = sun && (thresholds.hasRelay === true || earth);
     if (sample.t >= range.start && sample.t < range.end) {
-      inRange += 1;
-      if (sun) sunUp += 1;
-      if (earth) earthUp += 1;
-      if (sun && earth) bothUp += 1;
+      const ms = sampleMs(sample);
+      inRange += ms;
+      if (sun) sunUp += ms;
+      if (earth) earthUp += ms;
+      if (sun && earth) bothUp += ms;
+      rangeSamples.push(sample);
       sunInRange.push(sun);
       windowInRange.push(window);
     }
@@ -244,15 +263,16 @@ export function siteSky(
   return {
     sunPct: inRange ? (sunUp / inRange) * 100 : 0,
     earthPct: inRange ? (earthUp / inRange) * 100 : 0,
-    sunHours: sunUp,
-    earthHours: earthUp,
-    bothHours: bothUp,
-    longestSunlitDays: (longestRun(sunInRange) * HOUR_MS) / DAY_MS,
-    longestWindowDays: (longestRun(windowInRange) * HOUR_MS) / DAY_MS,
+    sunHours: sunUp / HOUR_MS,
+    earthHours: earthUp / HOUR_MS,
+    bothHours: bothUp / HOUR_MS,
+    longestSunlitDays: longestRunMs(rangeSamples, sunInRange) / DAY_MS,
+    longestWindowDays: longestRunMs(rangeSamples, windowInRange) / DAY_MS,
     windows: mergeRuns(
       samples.map((sample) => sample.t),
-      windowHours,
-      last ? last.t + HOUR_MS : 0,
+      windowFlags,
+      last ? last.t + sampleMs(last) : 0,
+      last ? sampleMs(last) : HOUR_MS,
     ),
   };
 }

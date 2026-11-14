@@ -73,7 +73,7 @@ describe('the night-survival words', () => {
 
   it('works out the battery needed here from your own slider’s watts, rounded up', () => {
     expect(batteryNeededText(20, { hours: 43, atLeast: false }, 'in this month')).toBe(
-      'Battery needed here: 860 Wh (6.1 kg at 143 Wh/kg), for your 20 W night load (set in Power details) over 43 h of darkness.',
+      'Battery needed here: 860 Wh (6.1 kg at 143 Wh/kg), for a 20 W night load over 43 h of darkness.',
     );
     expect(batteryNeededText(20, { hours: 0, atLeast: false }, 'in these dates')).toBe(
       'Battery needed here: none, no darkness in these dates.',

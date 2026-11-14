@@ -70,7 +70,6 @@ export function ElevationLine({
           Slope: average over one pixel (160 m or 40 m), not a pass/fail.
         </span>
       ) : null}
-      <span className={styles.sub}>Team raster ({manifest.sourceId}; origin to be recorded)</span>
     </p>
   );
 }

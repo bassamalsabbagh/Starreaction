@@ -9,7 +9,7 @@ export interface VisibilityFrame {
 }
 export interface VisibilityManifest {
   frames: VisibilityFrame[]; interval_minutes?: number; status?: string;
-  pixel_spacing_m?: number; limitations?: string[]; colors?: Record<string,string>;
+  pixel_spacing_m?: number; limitations?: string[]; colors?: Record<string, Record<string, string>>;
 }
 export function sampleVisibility(grid: NumericGrid, longitudeEastDegrees: number,
   latitudeDegrees: number): number | null;

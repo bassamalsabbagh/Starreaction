@@ -7,10 +7,11 @@
   view for direct contact, shows both against the horizon, lists usable landing windows, and shows
   what changes if the launch slips. Sites first pass or fail the mission's needs (Sun, Earth,
   slope), then are ranked in real units (usable window in days, % of mission needs met), never by
-  invented weights, and can be compared side by side. A Lessons page covers real past landings with
-  sources (e.g. Intuitive Machines IM-1 and IM-2).
-- **Not built yet (2026-11-13):** the slope check (needs real LOLA data). Don't assume it exists.
-- **Why:** NASA Space Apps Challenge 2026, Amman, November 14–15, 2026. Team of 4.
+  invented weights, and can be compared side by side. The left panel is a four-step plan (Location,
+  Mission, Dates, Results); the mission's needs are the user's own. The Lessons page was removed
+  (team decision); the past landings stay as "Past landings" in the Location step.
+- **Not built yet:** the slope check (needs real LOLA data). Don't assume it exists.
+- **Why:** NASA Space Apps Challenge 2026, Amman. Team of 4.
 - **Constraint:** competition deadline. Prefer simple, working, demo-able features over ambitious
   ones. The app must stay runnable at all times.
 - Plan and milestones: `docs/PROJECT_PLAN.md`. Known issues: `docs/KNOWN_ISSUES.md`.
@@ -24,13 +25,13 @@ tokens in `src/styles/global.css` · ESLint 10 (flat config) · Prettier · Vite
 global state libraries (Redux, Zustand, …), 3D engines, CSS frameworks, or new runtime dependencies.
 Propose the trade-off first.
 
-**Approved exceptions (2026-11-12, decision log in `docs/LANDER_RULES.md`):** one Vercel server
+**Approved exceptions (decision log in `docs/LANDER_RULES.md`):** one Vercel server
 function, `api/slip.ts`, and the Google Gemini API (free tier, plain `fetch`, no npm package) for
 the "Launch slipped?" assistant. Its key lives only in `GEMINI_API_KEY` on the server. The AI may
 only read the user's text into existing settings; it never supplies numbers, specs or prose. The
 site must keep working fully without it.
 
-**Also approved (2026-11-12, same decision log):** offline data scripts in `scripts/data/` (Python
+**Also approved (same decision log):** offline data scripts in `scripts/data/` (Python
 with rasterio/GDAL, versions pinned in `scripts/data/requirements.txt`) to prepare LOLA slope and
 terrain data. They run only on team laptops, are never shipped to the browser, and output small
 data files with sources in `docs/DATA_SOURCES.md`. They are kept apart from the Node build scripts

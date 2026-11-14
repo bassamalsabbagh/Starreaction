@@ -3,6 +3,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import {
   ArcType,
   BillboardCollection,
+  BoundingSphere,
   CallbackProperty,
   CameraEventType,
   ColorMaterialProperty,
@@ -20,6 +21,7 @@ import {
   Entity,
   GeographicTilingScheme,
   GeometryInstance,
+  HeadingPitchRange,
   ImageryLayer,
   Ion,
   JulianDate,
@@ -63,6 +65,8 @@ import {
   isWholeView,
   offsetLonLat,
   southPoleView,
+  POLE_TILT_DEG,
+  type PoleMode,
   viewShift,
   wheelDeltaPx,
   wheelTargetHeight,
@@ -102,12 +106,8 @@ import {
   TREK_FADE_START_M,
   TREK_FULL_M,
   fadeByHeight,
-  formatAltitude,
   makeStars,
-  metresPerPixel,
-  zoomPercent,
 } from './moonLook';
-import { ZoomReadout, type ReadoutValues } from './ZoomReadout';
 import {
   BEACON_SCALE,
   BEACON_SIZE_PX,
@@ -173,7 +173,6 @@ const STAGE_SHRINK_MS = 400;
 const DRIFT_IDLE_MS = 5_000;
 const DRIFT_MIN_HEIGHT_M = MOON_RADIUS_M * 1.5;
 const DRIFT_RADIANS_PER_SECOND = CesiumMath.toRadians(0.6);
-const READOUT_INTERVAL_MS = 100;
 /** Median frame gap while moving above which the map trades sharpness for frame rate (~50 fps). */
 const SLOW_FRAME_MS = 20;
 /** Radians of tilt allowed before the camera is turned back to straight down. */
@@ -381,10 +380,17 @@ export function MoonGlobe({
   const wholeHeightRef = useRef(MOON_RADIUS_M * 3);
   /** Re-measures the whole-Moon view after a layout change. Set up with the scene. */
   const refitRef = useRef<() => void>(() => undefined);
+  /** Frames the opening Top view again (until the camera has been moved). Set up with the scene. */
+  const applyTopRef = useRef<() => void>(() => undefined);
+  /** Top view settings on (no constrained axis, no tilt or look) or off (the previous ones). */
+  const setTopControlsRef = useRef<(top: boolean) => void>(() => undefined);
   /** Flies back to the whole-Moon view. Set up with the scene. */
   const flyWholeRef = useRef<() => void>(() => undefined);
   /** The tilted south-pole view (southPoleView), and leaving it. Set up with the scene. */
-  const flySouthPoleRef = useRef<() => void>(() => undefined);
+  const flySouthPoleRef = useRef<(mode: PoleMode) => void>(() => undefined);
+  // Whether the 3D (tilted) view is up, for flights that keep it.
+  const isTiltedRef = useRef<() => boolean>(() => false);
+  const [poleMode, setPoleMode] = useState<PoleMode>('top');
   const leaveTiltRef = useRef<() => void>(() => undefined);
   /** Points the Sun light, the Sun's glow and the Earth for a time. Set up with the scene. */
   const timeRef = useRef(time);
@@ -428,7 +434,6 @@ export function MoonGlobe({
   /** Marks a user action: stops the idle drift and the intro. Set up with the scene. */
   const interactRef = useRef<() => void>(() => undefined);
   const [hoverTip, setHoverTip] = useState<HoverTip | null>(null);
-  const [readout, setReadout] = useState<ReadoutValues | null>(null);
 
   useEffect(() => {
     onSelectRef.current = onSelectSite;
@@ -729,6 +734,7 @@ export function MoonGlobe({
     // demo's restore leaves it first (leaveTilt): straight down over the spot in the middle of the
     // view, keeping the screen's up direction, so the rest of the map never has to handle a tilt.
     let tiltedView = false;
+    isTiltedRef.current = () => tiltedView;
     const leaveTilt = () => {
       if (!tiltedView) return;
       tiltedView = false;
@@ -772,27 +778,97 @@ export function MoonGlobe({
     // Zooming towards the cursor can leave a slight tilt; turn it back to straight down every
     // frame, so the close view always reads as a flat map. The correction is tiny per frame, so it
     // never shows as a jump.
+    // Straight down over a place, keeping the screen's "up" as it is. Not by heading: near the pole
+    // "north" turns with every small move in longitude, so a heading kept while the camera moves
+    // spins the picture (the Top view rotated on every wheel zoom).
+    const setNadir = (destination: Cartesian3) => {
+      const direction = Cartesian3.negate(
+        Cartesian3.normalize(destination, new Cartesian3()),
+        new Cartesian3(),
+      );
+      const level = (vector: Cartesian3) =>
+        Cartesian3.subtract(
+          vector,
+          Cartesian3.multiplyByScalar(
+            direction,
+            Cartesian3.dot(vector, direction),
+            new Cartesian3(),
+          ),
+          new Cartesian3(),
+        );
+      let up = level(camera.up);
+      if (Cartesian3.magnitude(up) < 1e-6) up = level(camera.direction);
+      camera.setView({
+        destination,
+        orientation: { direction, up: Cartesian3.normalize(up, up) },
+      });
+    };
+    // The Top view needs a camera with no constrained axis (the default, the Moon's pole axis, is
+    // degenerate looking straight down at the pole) and no tilt or look; the 3D and globe views get
+    // the previous settings back.
+    const defaultAxis = camera.constrainedAxis
+      ? Cartesian3.clone(camera.constrainedAxis)
+      : undefined;
+    const controller = scene.screenSpaceCameraController;
+    const previousControls = { tilt: controller.enableTilt, look: controller.enableLook };
+    const setTopControls = (top: boolean) => {
+      camera.constrainedAxis = top ? undefined : defaultAxis;
+      controller.enableTilt = top ? false : previousControls.tilt;
+      controller.enableLook = top ? false : previousControls.look;
+    };
+    setTopControlsRef.current = setTopControls;
+    setTopControls(true);
     const removeNadirLock = scene.preRender.addEventListener(() => {
       if (tiltedView) return;
       if (
         Math.abs(camera.pitch - NADIR) > NADIR_TOLERANCE ||
         Math.abs(camera.roll) > NADIR_TOLERANCE
       ) {
-        camera.setView({ orientation: { heading: camera.heading, pitch: NADIR, roll: 0 } });
+        setNadir(Cartesian3.clone(camera.positionWC));
       }
     });
 
-    // Opening: ease in to the whole-Moon view (decorative; under reduced motion, start in place).
+    // The opening Top view stays until the user moves the camera: once the layout is measured (the
+    // panel beside the map), `applyTopRef` frames it again in the room that is really there.
+    let touched = false;
+    applyTopRef.current = () => {
+      if (touched || widget.isDestroyed()) return;
+      const pose = southPoleView(
+        focalLengthPx(frame.clientWidth, frame.clientHeight),
+        frame.clientWidth,
+        frame.clientHeight,
+        insetsRef.current ?? NO_INSETS,
+        POLE_TILT_DEG.top,
+      );
+      camera.cancelFlight();
+      camera.setView({
+        destination: Cartesian3.fromRadians(pose.lon, pose.lat, pose.height),
+        orientation: { heading: pose.heading, pitch: pose.pitch, roll: 0 },
+      });
+      scene.requestRender();
+    };
+    // Opening: straight down over the south pole, 80-90° S filling the view (Top). Eases in
+    // (decorative; under reduced motion, starts in place).
     let introRunning = !reducedMotion;
-    const whole = wholeHeightRef.current;
+    const topPose = southPoleView(
+      focalLengthPx(frame.clientWidth, frame.clientHeight),
+      frame.clientWidth,
+      frame.clientHeight,
+      insetsRef.current ?? NO_INSETS,
+      POLE_TILT_DEG.top,
+    );
     camera.setView({
-      destination: Cartesian3.fromDegrees(0, 0, reducedMotion ? whole : whole * INTRO_START_FACTOR),
-      orientation: { heading: 0, pitch: NADIR, roll: 0 },
+      destination: Cartesian3.fromRadians(
+        topPose.lon,
+        topPose.lat,
+        reducedMotion ? topPose.height : topPose.height * INTRO_START_FACTOR,
+      ),
+      orientation: { heading: topPose.heading, pitch: topPose.pitch, roll: 0 },
     });
     if (introRunning) {
       camera.flyTo({
-        destination: Cartesian3.fromDegrees(0, 0, whole),
-        orientation: { heading: 0, pitch: NADIR, roll: 0 },
+        destination: Cartesian3.fromRadians(topPose.lon, topPose.lat, topPose.height),
+        orientation: { heading: topPose.heading, pitch: topPose.pitch, roll: 0 },
         duration: INTRO_SECONDS,
         easingFunction: EasingFunction.CUBIC_OUT,
         complete: () => {
@@ -835,6 +911,7 @@ export function MoonGlobe({
       driftId = requestAnimationFrame(drift);
     }, 250);
     const interact = () => {
+      touched = true;
       lastTouch = performance.now();
       stopDrift();
       if (introRunning) camera.cancelFlight();
@@ -842,34 +919,6 @@ export function MoonGlobe({
     interactRef.current = interact;
     frame.addEventListener('pointerdown', interact);
     frame.addEventListener('keydown', interact);
-
-    // Readout: about 10 updates a second; React only re-renders when the text changes.
-    const readoutTimer = window.setInterval(() => {
-      const height = camera.positionCartographic.height;
-      const frustum = camera.frustum as { fov?: number };
-      const mpp = metresPerPixel(
-        height,
-        frustum.fov ?? CesiumMath.PI_OVER_THREE,
-        scene.canvas.clientWidth,
-        scene.canvas.clientHeight,
-      );
-      // Across the visible map: the frame less what the sidebars and panels cover.
-      const insets = insetsRef.current ?? NO_INSETS;
-      const visibleWidth = Math.max(0, frame.clientWidth - insets.left - insets.right);
-      const next: ReadoutValues = {
-        altitude: formatAltitude(height),
-        zoom: `${zoomPercent(height, wholeHeightRef.current)}%`,
-        distance: formatAltitude(mpp * visibleWidth),
-      };
-      setReadout((previous) =>
-        previous &&
-        previous.altitude === next.altitude &&
-        previous.zoom === next.zoom &&
-        previous.distance === next.distance
-          ? previous
-          : next,
-      );
-    }, READOUT_INTERVAL_MS);
 
     // Wheel zoom with a glide. One loop runs while a glide is under way; each new wheel event
     // just moves its target, so the glide follows the input without stepping.
@@ -882,10 +931,7 @@ export function MoonGlobe({
       const centre = glide.anchor
         ? zoomCentre({ lon: here.longitude, lat: here.latitude }, glide.anchor, here.height, next)
         : { lon: here.longitude, lat: here.latitude };
-      camera.setView({
-        destination: Cartesian3.fromRadians(centre.lon, centre.lat, next),
-        orientation: { heading: camera.heading, pitch: NADIR, roll: 0 },
-      });
+      setNadir(Cartesian3.fromRadians(centre.lon, centre.lat, next));
       scene.requestRender();
       if (next === glide.target) {
         glide.frameId = 0;
@@ -895,6 +941,7 @@ export function MoonGlobe({
       }
     };
     const glideTo = (height: number, anchor: LonLat | null) => {
+      touched = true;
       leaveTilt();
       camera.cancelFlight();
       glide.target = Math.min(wholeHeightRef.current, Math.max(MIN_HEIGHT_M, height));
@@ -907,6 +954,7 @@ export function MoonGlobe({
     // so it runs the same under reduced motion.
     let flyingWhole = false;
     const flyWhole = () => {
+      setTopControlsRef.current(false);
       leaveTilt();
       stopGlide(glide);
       const target = wholeHeightRef.current;
@@ -928,22 +976,30 @@ export function MoonGlobe({
     };
     flyWholeRef.current = flyWhole;
 
-    // "South pole": the tilted view over the pole (cameraControls southPoleView), fitted to the
-    // visible area. Navigation, so it runs the same under reduced motion.
-    const flySouthPole = () => {
+    // Top and 3D: the view over the pole (cameraControls southPoleView), straight down or tilted
+    // 45°, fitted to the visible area, in a smooth flight. Navigation, so it runs the same under
+    // reduced motion. The straight-down lock rests during the flight and comes back for Top.
+    const flySouthPole = (mode: PoleMode) => {
       stopGlide(glide);
+      setTopControlsRef.current(mode === 'top');
       const insets = insetsRef.current ?? NO_INSETS;
       const pose = southPoleView(
         focalLengthPx(frame.clientWidth, frame.clientHeight),
         frame.clientWidth,
         frame.clientHeight,
         insets,
+        POLE_TILT_DEG[mode],
       );
+      const settle = () => {
+        if (mode === 'top') tiltedView = false;
+      };
       camera.flyTo({
         destination: Cartesian3.fromRadians(pose.lon, pose.lat, pose.height),
         orientation: { heading: pose.heading, pitch: pose.pitch, roll: 0 },
         duration: FLY_SECONDS,
         easingFunction: EasingFunction.QUADRATIC_IN_OUT,
+        complete: settle,
+        cancel: settle,
       });
       // After flyTo, which cancels (and so clears) any flight already under way.
       tiltedView = true;
@@ -957,9 +1013,9 @@ export function MoonGlobe({
           interactRef.current();
           flyWhole();
         },
-        showSouthPole: () => {
+        showSouthPole: (mode: PoleMode = '3d') => {
           interactRef.current();
-          flySouthPole();
+          flySouthPole(mode);
         },
         saveView: (): SavedView => ({
           destination: Cartesian3.clone(camera.positionWC),
@@ -1245,7 +1301,6 @@ export function MoonGlobe({
       window.removeEventListener('pointercancel', releasePointer);
       stopDrift();
       window.clearInterval(idleCheck);
-      window.clearInterval(readoutTimer);
       removeMoveStart();
       removeMoveEnd();
       cameraApiRef.current = null;
@@ -1406,8 +1461,21 @@ export function MoonGlobe({
     const place = flyRequest.point ?? entry?.site;
     if (!place) return;
     interactRef.current();
-    leaveTiltRef.current();
     stopGlide(glideRef.current);
+    if (isTiltedRef.current() && place.lat < -80) {
+      const { camera } = widget;
+      const range = camera.positionCartographic.height / Math.max(0.2, Math.sin(-camera.pitch));
+      camera.flyToBoundingSphere(
+        new BoundingSphere(Cartesian3.fromDegrees(place.lon, place.lat, 0, Ellipsoid.MOON), 1),
+        {
+          offset: new HeadingPitchRange(camera.heading, camera.pitch, range),
+          duration: FLY_SECONDS,
+          easingFunction: EasingFunction.QUADRATIC_IN_OUT,
+        },
+      );
+      return;
+    }
+    leaveTiltRef.current();
     const here = widget.camera.positionCartographic;
     // Close up, aim beside an open left panel: the site lands in the middle of the uncovered map.
     // Zoomed out the Moon stays centred (the panel never covers the middle of the disc).
@@ -1612,6 +1680,7 @@ export function MoonGlobe({
   useEffect(() => {
     insetsRef.current = viewInsets;
     refitRef.current();
+    applyTopRef.current();
   }, [viewInsets]);
 
   // The stage: the canvas and what is pinned to it, shifted so the straight-down camera's centre
@@ -1663,9 +1732,10 @@ export function MoonGlobe({
     flyWholeRef.current();
   };
 
-  const showSouthPole = () => {
+  const showPole = (mode: PoleMode) => {
     interactRef.current();
-    flySouthPoleRef.current();
+    setPoleMode(mode);
+    flySouthPoleRef.current(mode);
   };
 
   return (
@@ -1704,21 +1774,14 @@ export function MoonGlobe({
           onZoomIn={() => zoomBy(0.5)}
           onZoomOut={() => zoomBy(2)}
           onWholeMoon={showWholeMoon}
-          onSouthPole={showSouthPole}
+          poleMode={poleMode}
+          onPoleMode={showPole}
           showGrid={showGrid}
           onShowGridChange={onShowGridChange}
           onToggleLayers={onToggleLayers}
           layersOpen={layersOpen}
           onPresent={onPresent}
         />
-      </div>
-
-      {/* The zoom readout: bottom right, just above the timeline, clear of the icon column. */}
-      <div
-        className={joinClassNames(styles.readoutCorner, controlsHidden && styles.cornerHidden)}
-        aria-hidden={controlsHidden || undefined}
-      >
-        {readout ? <ZoomReadout values={readout} /> : null}
       </div>
 
       <div ref={creditRef} className={styles.cesiumCredits} aria-hidden="true" />

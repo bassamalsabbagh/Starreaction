@@ -1,3 +1,4 @@
+import { formatClock } from '../../../../src/utils/time';
 import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { HorizonsCheckTable } from '../../../../src/features/about/HorizonsCheckTable';
@@ -21,7 +22,8 @@ describe('HorizonsCheckTable', () => {
     render(<HorizonsCheckTable />);
     const section = screen.getByRole('region', { name: 'Checked against JPL Horizons' });
     expect(section).toHaveTextContent('docs/HORIZONS_CHECK.md');
-    expect(section).toHaveTextContent('Generated 13 Nov 2026');
+    // The date of the last run (scripts/horizons_check.ts), whatever day it was.
+    expect(section).toHaveTextContent(`Generated ${formatClock(Date.parse(check.generatedUtc))}`);
     const [engine, flags, elevations] = within(section).getAllByRole('table');
     if (!engine || !flags || !elevations) throw new Error('three tables expected');
 

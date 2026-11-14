@@ -79,6 +79,21 @@ describe('settings and display', () => {
   });
 });
 
+describe('visibilityDisplay at 0 % opacity', () => {
+  it('does not draw a target whose opacity is 0, exactly as if it were hidden', () => {
+    const on = { ...INITIAL_VISIBILITY, on: true, started: true, active: 'sun' as const };
+    const frame = '2026-11-30T12:10:00Z';
+    expect(visibilityDisplay(on, frame).sun).toEqual({ visible: true, opacity: 0.8 });
+    const zero = { ...on, opacity: { sun: 0, earth: 0 } };
+    expect(visibilityDisplay(zero, frame).sun).toEqual({ visible: false, opacity: 0 });
+    expect(visibilityDisplay(zero, frame).earth.visible).toBe(false);
+    const half = { ...on, opacity: { sun: 0.5, earth: 0.8 } };
+    expect(visibilityDisplay(half, frame).sun).toEqual({ visible: true, opacity: 0.5 });
+    // The hidden target contributes nothing, whatever its own opacity.
+    expect(visibilityDisplay(half, frame).earth.visible).toBe(false);
+  });
+});
+
 describe('visibilityReadout', () => {
   const sample = (fraction: number) => ({
     fraction,
@@ -95,6 +110,24 @@ describe('visibilityReadout', () => {
     });
     // The smallest non-zero step (1/128) still reads as more than nothing.
     expect(read(sample(1 / 128)).main).toBe('Approx. visible disc: 1 %');
+  });
+
+  it('rounds partial values to whole percent, halves up (values come in 1/128 steps)', () => {
+    const cases: [number, string][] = [
+      [3 / 128, '2'], // 2.34 %
+      [16 / 128, '13'], // 12.5 %: exactly half, rounds up
+      [43 / 128, '34'], // 33.59 %
+      [48 / 128, '38'], // 37.5 %
+      [63 / 128, '49'], // 49.22 %
+      [64 / 128, '50'],
+      [80 / 128, '63'], // 62.5 %
+      [112 / 128, '88'], // 87.5 %
+      [127 / 128, '99'], // 99.22 %: just under full never reads 100
+      [1, '100'],
+    ];
+    for (const [fraction, pct] of cases) {
+      expect(read(sample(fraction)).main).toBe(`Approx. visible disc: ${pct} %`);
+    }
   });
 
   it('keeps 0 % as a value', () => {

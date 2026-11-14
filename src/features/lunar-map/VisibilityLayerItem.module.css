@@ -126,3 +126,18 @@
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
 }
+
+.tickWord {
+  white-space: nowrap;
+}
+
+/* Phones: "(transparent)" gives way so the 0 % and 50 % ticks never touch (the caption says it). */
+@media (max-width: 599px) {
+  .tickWord {
+    display: none;
+  }
+}
+
+.ends {
+  composes: ends from './LayerPanel.module.css';
+}

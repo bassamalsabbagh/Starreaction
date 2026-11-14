@@ -1,4 +1,5 @@
-import { useId, useState } from 'react';
+import { useId, useState, type MouseEvent } from 'react';
+import { DAY_MS } from '../../utils/time';
 import { joinClassNames } from '../../utils/classNames';
 import {
   dateInputValue,
@@ -11,22 +12,29 @@ import {
 } from './dateRange';
 import styles from './DateRangePicker.module.css';
 
+/** Until the stop date is set by hand, it is the start plus this many days. */
+const FOLLOW_DAYS = 14;
+
 interface DateRangePickerProps {
   /** The picked dates, or null: the checks then use the time bar's 29.5 days. */
   value: DateRange | null;
   onChange: (range: DateRange | null) => void;
+  /** False in the wizard's Dates step: no title, no Delay buttons (they sit with the results). */
+  withActions?: boolean;
 }
 
 /**
  * "Dates to check" in the Mission view (docs/LANDER_RULES.md, "Date range and hours"): a start and
- * a stop date (UTC, the stop date included), "Delay 1 week" and "Delay 1 month". A valid pair is
+ * a stop date (UTC, the stop date included), "+7 days" and "+1 month". A valid pair is
  * used at once; an impossible one is explained inline and changes nothing.
  */
-export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, withActions = true }: DateRangePickerProps) {
   const baseId = useId();
   const [start, setStart] = useState(value ? dateInputValue(value.startMs) : '');
   const [stop, setStop] = useState(value ? dateInputValue(value.stopMs) : '');
   const [delayError, setDelayError] = useState<string | null>(null);
+  // Until the stop date is set by hand, it follows the start: 14 days later.
+  const [stopTouched, setStopTouched] = useState(false);
   // Dates set from outside (Delay, the assistant, Clear) replace what the fields show.
   const [shown, setShown] = useState(value);
   if (value !== shown) {
@@ -35,6 +43,15 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
     setStop(value ? dateInputValue(value.stopMs) : '');
     setDelayError(null);
   }
+
+  // A click on a date box opens the browser's calendar; typing still works.
+  const openCalendar = (event: MouseEvent<HTMLInputElement>) => {
+    try {
+      event.currentTarget.showPicker();
+    } catch {
+      // Not allowed or not supported here: the box still takes typing.
+    }
+  };
 
   const read = readDateRange(start, stop);
   const error = read && 'error' in read ? read.error : null;
@@ -61,7 +78,9 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
       ? `Checking ${dateRangeText(value)}, the stop date included.`
       : start !== '' || stop !== ''
         ? 'Pick both dates.'
-        : `Checking the time bar’s 29.5 days. Pick dates to check your own range, up to ${RANGE_MONTHS_MAX} months; Delay works once both are picked.`);
+        : !withActions
+          ? 'Pick a start and a stop date (UTC).'
+          : `Checking the time bar’s 29.5 days. Pick dates to check your own range, up to ${RANGE_MONTHS_MAX} months; Delay works once both are picked.`);
 
   return (
     <section className={styles.dates} aria-labelledby={`${baseId}-title`}>
@@ -79,7 +98,18 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
             value={start}
             aria-invalid={error ? true : undefined}
             aria-describedby={`${baseId}-hint`}
-            onChange={(event) => change(event.target.value, stop)}
+            onClick={openCalendar}
+            onChange={(event) => {
+              const next = event.target.value;
+              const day = next === '' ? NaN : Date.parse(`${next}T00:00:00Z`);
+              // The stop date follows the start (14 days on) until it is set by hand.
+              const stopDay = stop === '' ? NaN : Date.parse(`${stop}T00:00:00Z`);
+              const follow =
+                Number.isFinite(day) && (!stopTouched || !(stopDay >= day))
+                  ? dateInputValue(day + FOLLOW_DAYS * DAY_MS)
+                  : stop;
+              change(next, follow);
+            }}
           />
         </label>
         <label className={styles.field}>
@@ -92,7 +122,11 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
             value={stop}
             aria-invalid={error ? true : undefined}
             aria-describedby={`${baseId}-hint`}
-            onChange={(event) => change(start, event.target.value)}
+            onClick={openCalendar}
+            onChange={(event) => {
+              setStopTouched(true);
+              change(start, event.target.value);
+            }}
           />
         </label>
       </div>
@@ -103,33 +137,35 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
       >
         {hint}
       </p>
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.button}
-          disabled={!value}
-          title={value ? undefined : 'Pick a start and a stop date first'}
-          aria-describedby={`${baseId}-hint`}
-          onClick={() => delay('week')}
-        >
-          Delay 1 week
-        </button>
-        <button
-          type="button"
-          className={styles.button}
-          disabled={!value}
-          title={value ? undefined : 'Pick a start and a stop date first'}
-          aria-describedby={`${baseId}-hint`}
-          onClick={() => delay('month')}
-        >
-          Delay 1 month
-        </button>
-        {value ? (
-          <button type="button" className={styles.button} onClick={() => onChange(null)}>
-            Use the time bar’s 29.5 days
+      {withActions ? (
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.button}
+            disabled={!value}
+            title={value ? undefined : 'Pick a start and a stop date first'}
+            aria-describedby={`${baseId}-hint`}
+            onClick={() => delay('week')}
+          >
+            +7 days
           </button>
-        ) : null}
-      </div>
+          <button
+            type="button"
+            className={styles.button}
+            disabled={!value}
+            title={value ? undefined : 'Pick a start and a stop date first'}
+            aria-describedby={`${baseId}-hint`}
+            onClick={() => delay('month')}
+          >
+            +1 month
+          </button>
+          {value ? (
+            <button type="button" className={styles.button} onClick={() => onChange(null)}>
+              Use the time bar’s 29.5 days
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

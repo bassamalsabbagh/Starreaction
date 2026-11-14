@@ -42,20 +42,16 @@ function renderPanel(
   const handlers = {
     onToggle: vi.fn(),
     onChoose: vi.fn(),
+    onShow: vi.fn(),
     onOpacity: vi.fn(),
-    onActiveTarget: vi.fn(),
   };
   render(
     <LayerPanel
       layers={[]}
       settings={{}}
       onToggle={vi.fn()}
-      onOpacity={vi.fn()}
-      activeId={null}
-      onActive={vi.fn()}
-      reading={null}
+      readings={{}}
       onClose={vi.fn()}
-      sourceId="SRC-073"
       visibility={{
         settings: options.settings ?? ON,
         runtime: options.runtime ?? READY,
@@ -70,40 +66,32 @@ function renderPanel(
 }
 
 describe('Visibility layer in the map layers panel', () => {
-  it('starts with one switch; switching it on is the parent’s call', () => {
+  it('has a Sun and an Earth tile; showing one is the parent’s call', () => {
     const handlers = renderPanel({ settings: INITIAL_VISIBILITY, runtime: IDLE_RUNTIME });
-    const main = screen.getByRole('checkbox', { name: 'Visibility (prototype)' });
-    expect(main).not.toBeChecked();
-    expect(screen.queryByRole('group', { name: 'Visibility overlay' })).toBeNull();
-    fireEvent.click(main);
-    expect(handlers.onToggle).toHaveBeenCalledOnce();
+    const sun = screen.getByRole('button', { name: /^Sun visibility/ });
+    expect(sun).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('visibility-frame')).toBeNull();
+    // A small grey "Preview" tag on the Sun and Earth visibility rows, and on no other row.
+    expect(within(sun).getByText('Preview')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('button', { name: /^Earth visibility/ })).getByText('Preview'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Preview')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /^Earth visibility/ }));
+    expect(handlers.onShow).toHaveBeenCalledWith('earth');
   });
 
-  it('offers Sun | Earth buttons, one pressed, and the opacity of the one shown', () => {
-    const handlers = renderPanel({ settings: { ...ON, opacity: { sun: 0.8, earth: 0.35 } } });
-    const group = screen.getByRole('group', { name: 'Visibility overlay' });
-    const sun = within(group).getByRole('button', { name: 'Sun' });
-    const earth = within(group).getByRole('button', { name: 'Earth' });
-    expect(sun).toHaveAttribute('aria-pressed', 'true');
-    expect(earth).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(earth);
-    expect(handlers.onChoose).toHaveBeenCalledWith('earth');
-    // Only the shown overlay's slider, at its own opacity.
-    const slider = screen.getByRole('slider', { name: 'Sun visibility (prototype) opacity' });
-    expect(slider).toHaveValue('80');
-    expect(
-      screen.queryByRole('slider', { name: 'Earth visibility (prototype) opacity' }),
-    ).toBeNull();
-    fireEvent.change(slider, { target: { value: '35' } });
-    expect(handlers.onOpacity).toHaveBeenCalledWith('sun', 0.35);
-  });
-
-  it('shows the Earth’s own opacity when the Earth is the overlay', () => {
-    renderPanel({ settings: { ...ON, active: 'earth', opacity: { sun: 0.8, earth: 0.35 } } });
-    expect(screen.getByRole('button', { name: 'Earth' })).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByRole('slider', { name: 'Earth visibility (prototype) opacity' }),
-    ).toHaveValue('35');
+  it('presses the tile of the overlay shown, and has no opacity slider (fixed opacity)', () => {
+    renderPanel({ settings: { ...ON, opacity: { sun: 0.8, earth: 0.35 } } });
+    expect(screen.getByRole('button', { name: /^Sun visibility/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /^Earth visibility/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.queryByRole('slider')).toBeNull();
   });
 
   for (const target of ['sun', 'earth'] as const) {
@@ -111,11 +99,14 @@ describe('Visibility layer in the map layers panel', () => {
       renderPanel({ settings: { ...ON, active: target } });
       const name = target === 'sun' ? 'Sun' : 'Earth';
       const legend = screen.getByRole('figure', {
-        name: `${name} visibility (prototype) legend, % of the disc`,
+        name: `${name} visibility legend, % of the disc`,
       });
-      expect(legend).toHaveTextContent('0 % (transparent)');
-      expect(legend).toHaveTextContent('50 %');
-      expect(legend).toHaveTextContent('100 %');
+      const ends = {
+        sun: ['Rarely sunlit 0%', 'Often sunlit, more power 100%'],
+        earth: ['Rarely in view 0%', 'Often in view, more contact 100%'],
+      }[target];
+      expect(legend).toHaveTextContent(ends.join(''));
+      expect(legend.querySelectorAll('span')).toHaveLength(2);
       const background = screen.getByTestId(`visibility-legend-${target}`).style.background;
       const stops = palette[target].stops;
       // Fully transparent at 0, then each palette colour; the last is opaque (jsdom writes it
@@ -129,22 +120,14 @@ describe('Visibility layer in the map layers panel', () => {
     });
   }
 
-  it('keeps the label, the meaning and the frame shown', () => {
+  it('shows no explanation lines under the legend; only "No frame" when it applies', () => {
     renderPanel();
-    expect(screen.getByText(VISIBILITY_LABEL)).toBeInTheDocument();
+    // The explanations are on the About page.
+    expect(screen.queryByText(/Preview:|Geometric visibility|not a share of time lit/)).toBeNull();
+    expect(screen.queryByText(/South pole only/)).toBeNull();
+    expect(screen.queryByTestId('visibility-frame')).toBeNull();
     expect(VISIBILITY_LABEL).toBe(
-      'Prototype geometric visibility · 9.6 km grid · 2 m assumed height · eclipses not modeled',
-    );
-    expect(screen.getByTestId('visibility-frame')).toHaveTextContent(
-      'Frame shown: 2026-11-30 12:10 UTC',
-    );
-    expect(screen.getByText(/not a share of time lit/)).toBeInTheDocument();
-  });
-
-  it('keeps the shown frame’s time while the next loads, and says so', () => {
-    renderPanel({ runtime: { ...READY, loading: true }, frame: '2026-11-30T12:20:00Z' });
-    expect(screen.getByTestId('visibility-frame')).toHaveTextContent(
-      'Frame shown: 2026-11-30 12:10 UTC · loading the new frame…',
+      'Geometric visibility · 9.6 km grid · 2 m assumed height · eclipses not modeled',
     );
   });
 
@@ -162,25 +145,39 @@ describe('Visibility layer in the map layers panel', () => {
 
   it('turns the switch off with a note when the manifest could not be read', () => {
     renderPanel({ runtime: { ...IDLE_RUNTIME, status: 'unavailable' } });
-    expect(screen.getByRole('checkbox', { name: 'Visibility (prototype)' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Sun visibility/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Earth visibility/ })).toBeDisabled();
     expect(screen.getByText(/Visibility layer unavailable/)).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Visibility overlay' })).toBeNull();
   });
 
-  it('offers the shown overlay under Readings from, and shows its readout', () => {
+  it('shows the readout of the overlay the readings follow, and no Readings from choice', () => {
     renderPanel({
       settings: { ...ON, active: 'earth' },
       activeTarget: 'earth',
       readout: { main: 'Approx. visible disc: 0 %', detail: '9.6 km grid · 2026-11-30 12:10 UTC' },
     });
-    const group = screen.getByRole('group', { name: 'Readings from' });
-    const radio = within(group).getByRole('radio', { name: 'Earth visibility (prototype)' });
-    expect(radio).toBeChecked();
-    expect(within(group).queryByRole('radio', { name: 'Sun visibility (prototype)' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Readings from' })).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
     const readout = screen.getByTestId('visibility-readout');
     expect(readout).toHaveTextContent('Approx. visible disc: 0 %');
-    expect(readout).toHaveTextContent('9.6 km grid · 2026-11-30 12:10 UTC');
-    expect(readout).toHaveTextContent(/not DSN link availability/);
+  });
+
+  it('shows no readout box while there is nothing to read', () => {
+    renderPanel({
+      settings: { ...ON, active: 'earth' },
+      activeTarget: 'earth',
+      readout: {
+        main: 'Point at the south pole, or tap it, to read the visibility.',
+        detail: null,
+      },
+    });
+    expect(screen.queryByTestId('visibility-readout')).toBeNull();
+  });
+
+  it('has no sources text and no "flat horizon" wording', () => {
+    renderPanel();
+    expect(screen.queryByText(/Source|Sources/)).toBeNull();
+    expect(screen.queryByText(/flat horizon/i)).toBeNull();
   });
 });
 
@@ -190,7 +187,7 @@ describe('Visibility panel on a narrow (~360 px) screen', () => {
     window.innerWidth = 360;
     try {
       renderPanel();
-      expect(screen.getByRole('group', { name: 'Visibility overlay' })).toBeInTheDocument();
+      expect(screen.getByRole('list', { name: 'Layers to show' })).toBeInTheDocument();
       expect(screen.getByTestId('visibility-legend-sun')).toBeInTheDocument();
     } finally {
       window.innerWidth = width;
@@ -198,18 +195,16 @@ describe('Visibility panel on a narrow (~360 px) screen', () => {
   });
 
   // jsdom does no layout, so the CSS that keeps them inside the panel is checked as written.
-  it('lets the buttons wrap and shrink instead of overflowing', () => {
+  it('lets the tiles wrap and the legend shrink instead of overflowing', () => {
     const css = readFileSync('src/features/lunar-map/VisibilityLayerItem.module.css', 'utf8');
     const rule = (name: string) => css.match(new RegExp(`\\.${name} \\{([^}]*)\\}`))?.[1] ?? '';
-    expect(rule('segmented')).toMatch(/flex-wrap: wrap/);
-    expect(rule('segmented')).toMatch(/min-width: 0/);
-    expect(rule('segment')).toMatch(/min-width: 0/);
-    expect(rule('segment')).toMatch(/flex: 1 1 5rem/);
+    // The row of layers wraps instead of overflowing.
+    const rowsCss = readFileSync('src/features/lunar-map/LayerPanel.module.css', 'utf8');
+    expect(rowsCss.match(/\.rows \{([^}]*)\}/)?.[1] ?? '').toMatch(/flex-flow: row wrap/);
     expect(rule('legend')).toMatch(/min-width: 0/);
     expect(rule('unit')).toMatch(/text-wrap: pretty/);
-    // The panel itself never grows past the screen: min(20rem, 100vw − 6rem) = 264 px at 360 px.
-    const panelCss = readFileSync('src/features/lunar-map/LayerPanel.module.css', 'utf8');
-    expect(panelCss).toMatch(/width: min\(20rem, calc\(100vw - 6rem\)\)/);
+    // The panel itself never grows past the screen.
+    expect(rowsCss).toMatch(/width: min\(26rem, calc\(100vw - var\(--rail-width\) - 4rem\)\)/);
   });
 });
 

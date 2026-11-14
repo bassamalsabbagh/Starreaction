@@ -237,23 +237,55 @@ export function horizonsSky(series: HorizonsSeries, site: LatLon, t: number): Lu
 }
 
 /**
- * One sample per whole hour inside `range` (the same hours as `hourlySky`) for one site: from
- * Horizons where the series covers the hour, otherwise from the app's engine. The vectors are only
- * valid for this site. `fromHorizons` counts the hours that came from Horizons.
+ * The samples for one fixed site inside `range` (docs/LANDER_RULES.md, "Date range and hours"):
+ * every stored 10-minute step of its JPL Horizons series where the series covers the time, and one
+ * per whole hour from our engine elsewhere (an hour that would run into the series stops where it
+ * starts). Each sample carries its own length (`stepMs`). The vectors are only valid for this site.
+ * `fromHorizons` counts the samples that came from Horizons.
  */
-export function siteHourlySky(
+export function siteSamples(
   series: HorizonsSeries | null,
   site: LatLon,
   range: TimeRange,
 ): { samples: SkySample[]; fromHorizons: number } {
   const samples: SkySample[] = [];
   let fromHorizons = 0;
-  for (let hour = Math.ceil(range.start / HOUR_MS); hour * HOUR_MS < range.end; hour += 1) {
-    const t = hour * HOUR_MS;
-    const sky = series ? horizonsSky(series, site, t) : null;
-    if (sky) fromHorizons += 1;
-    const used = sky ?? skyAtHour(hour);
-    samples.push({ t, sun: used.sun, earth: used.earth });
+  const span = series ? seriesSpan(series) : null;
+  let t = range.start;
+  while (t < range.end) {
+    if (series && span && t >= span.start && t <= span.end) {
+      const at = series.startMs + Math.ceil((t - series.startMs) / series.stepMs) * series.stepMs;
+      if (at > span.end) {
+        t = at;
+        continue;
+      }
+      if (at >= range.end) break;
+      const sky = horizonsSky(series, site, at);
+      if (sky) {
+        samples.push({ t: at, sun: sky.sun, earth: sky.earth, stepMs: series.stepMs });
+        fromHorizons += 1;
+      }
+      t = at + series.stepMs;
+      continue;
+    }
+    const hour = Math.ceil(t / HOUR_MS);
+    const at = hour * HOUR_MS;
+    if (at >= range.end) break;
+    // Rounded up into the series: its own samples take over from there.
+    if (span && at >= span.start && at <= span.end) {
+      t = at;
+      continue;
+    }
+    const toSeries = span && at < span.start ? span.start - at : HOUR_MS;
+    const stepMs = Math.min(HOUR_MS, toSeries);
+    const sky = skyAtHour(hour);
+    samples.push({
+      t: at,
+      sun: sky.sun,
+      earth: sky.earth,
+      ...(stepMs < HOUR_MS ? { stepMs } : {}),
+    });
+    t = at + stepMs;
   }
   return { samples, fromHorizons };
 }
@@ -355,3 +387,12 @@ export function loadHorizonsSeries(
   }
   return load;
 }
+
+/** The dates the JPL Horizons files cover (first to last sample), or null without the files. */
+export const HORIZONS_COVERAGE: TimeRange | null = HORIZONS_INDEX
+  ? {
+      start: HORIZONS_INDEX.startMs,
+      end:
+        HORIZONS_INDEX.startMs + (HORIZONS_INDEX.count - 1) * HORIZONS_INDEX.stepMinutes * 60_000,
+    }
+  : null;

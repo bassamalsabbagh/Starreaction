@@ -1,0 +1,33 @@
+{
+  "about": "Legend ends (display only): percentiles of the valid 160 m cap values, from scripts/data/legend_range.py. The readings are always the real values.",
+  "layers": {
+    "elevation": {
+      "min": -5214.0,
+      "max": 4448.0,
+      "lowPercentile": 1,
+      "highPercentile": 99,
+      "validPixels": 12877824,
+      "gridMin": -6676.0,
+      "gridMax": 7025.0,
+      "patchMax40m": 6907.0,
+      "indexLegend": [
+        -7275.95,
+        7025.79
+      ]
+    },
+    "slope": {
+      "min": 0.0,
+      "max": 27.1,
+      "lowPercentile": null,
+      "highPercentile": 99,
+      "validPixels": 12877824,
+      "gridMin": 0.07,
+      "gridMax": 49.88,
+      "patchMax40m": 88.28,
+      "indexLegend": [
+        0.0,
+        89.27
+      ]
+    }
+  }
+}

@@ -35,4 +35,24 @@ describe('MapControls', () => {
       expect(button).not.toHaveAttribute('aria-disabled');
     }
   });
+
+  it('offers Top and 3D views of the south pole, the current one pressed', () => {
+    const onPoleMode = vi.fn();
+    render(
+      <MapControls
+        onZoomIn={() => undefined}
+        onZoomOut={() => undefined}
+        onWholeMoon={() => undefined}
+        showGrid={false}
+        onShowGridChange={() => undefined}
+        poleMode="top"
+        onPoleMode={onPoleMode}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Top' })).toHaveAttribute('aria-pressed', 'true');
+    const tilted = screen.getByRole('button', { name: '3D' });
+    expect(tilted).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(tilted);
+    expect(onPoleMode).toHaveBeenCalledWith('3d');
+  });
 });

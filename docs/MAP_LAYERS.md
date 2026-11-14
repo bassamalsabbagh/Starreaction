@@ -8,7 +8,7 @@ How the Phase C map layers are made, what the site serves, and how to check them
 
 One folder with, for each layer, a numerical GeoTIFF and its rendered colours:
 
-| File                      | Contents                                                                                     | Status (2026-11-13) |
+| File                      | Contents                                                                                     | Status              |
 | ------------------------- | -------------------------------------------------------------------------------------------- | ------------------- |
 | `slope_40m.tif`           | float32 degrees, NoData NaN                                                                  | used                |
 | `slope_40m_color.tif`     | 8-bit RGBA, the team's slope render                                                          | used                |
@@ -36,7 +36,7 @@ re-reads every check point through the app's own code.
 
 ## What the site serves
 
-| Path                                                    | What                                                        | Size (2026-11-13)              |
+| Path                                                    | What                                                        | Size                           |
 | ------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------ |
 | `src/data/layers/index.json`                            | grid, encoding, tile list, image bounds, legend (bundled)   | small                          |
 | `public/data/layers/<layer>/display/preview-q*.png`     | 4 quarters of 80–90° S, 512 px, shown first                 | ~0.7 MB each                   |

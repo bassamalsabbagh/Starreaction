@@ -8,6 +8,8 @@ import {
   formatLayerValue,
   layerDisplays,
   layerImagePlan,
+  legendEnds,
+  legendRange,
   legendScale,
   readingStatus,
   readoutText,
@@ -110,7 +112,9 @@ describe('the readout', () => {
     expect(
       readoutText(layer(), { kind: 'value', value: 0, unit: '°', levelId: 'base', pixelM: 160 }),
     ).toBe('Slope 0.00° · 160 m');
-    expect(formatLayerValue(ELEVATION, -1234)).toBe('-1234 m');
+    // Elevation reads in kilometres, one decimal, signed.
+    expect(formatLayerValue(ELEVATION, -1234)).toBe('-1.2 km');
+    expect(formatLayerValue(ELEVATION, 1234)).toBe('+1.2 km');
   });
 
   it('says no data, outside, unavailable and load failures in words', () => {
@@ -187,11 +191,11 @@ describe.runIf(MAP_LAYERS !== null && existsSync(`${root}public/data/layers`))(
     });
 
     it.each([
-      ['IM-1, in its 40 m patch', -80.13, 1.44, 'Elevation 2592 m · 40 m'],
-      ['IM-2, in its 40 m patch', -84.7906, 29.1957, 'Elevation 5323 m · 40 m'],
-      ['near the pole', -89.99, 45, 'Elevation 1281 m · 160 m'],
-      ['80.5° S, 180° E (below the reference sphere)', -80.5, 180, 'Elevation -3466 m · 160 m'],
-      ['85° S, 90° W', -85, -90, 'Elevation -2298 m · 160 m'],
+      ['IM-1, in its 40 m patch', -80.13, 1.44, 'Elevation +2.6 km · 40 m'],
+      ['IM-2, in its 40 m patch', -84.7906, 29.1957, 'Elevation +5.3 km · 40 m'],
+      ['near the pole', -89.99, 45, 'Elevation +1.3 km · 160 m'],
+      ['80.5° S, 180° E (below the reference sphere)', -80.5, 180, 'Elevation -3.5 km · 160 m'],
+      ['85° S, 90° W', -85, -90, 'Elevation -2.3 km · 160 m'],
       ['79.5° S, outside', -79.5, 0, 'No data here: this tool covers 80° S to the pole'],
     ])('elevation at %s reads "%s"', async (_label, lat, lon, expected) => {
       expect(await read('elevation', lat, lon)).toBe(expected);
@@ -207,14 +211,52 @@ describe('the globe’s shading under the layers', () => {
   });
 });
 
-describe('previews only on small devices', () => {
-  it('keeps the 512 px previews under 900 px wide or with 4 GB of memory or less', () => {
-    expect(previewsOnly(899, undefined)).toBe(true);
-    expect(previewsOnly(1366, 4)).toBe(true);
-    expect(previewsOnly(1366, 8)).toBe(false);
-    expect(previewsOnly(1366, undefined)).toBe(false);
+describe('previews only on phones', () => {
+  it('keeps the 512 px images on phones only; laptops and tablets draw the full ones', () => {
+    expect(previewsOnly(390)).toBe(true);
+    expect(previewsOnly(599)).toBe(true);
+    expect(previewsOnly(600)).toBe(false);
+    expect(previewsOnly(1366)).toBe(false);
     const displays = layerDisplays([layer()], { slope: { visible: true, opacity: 1 } }, url, true);
     expect(displays[0]?.preview).toHaveLength(1);
     expect(displays[0]?.full).toEqual([]);
+  });
+});
+
+describe('the legend range (percentiles, not the most extreme pixels)', () => {
+  const legend = {
+    stops: [
+      { value: 0, color: '#000000' },
+      { value: 50, color: '#808080' },
+      { value: 100, color: '#ffffff' },
+    ],
+    min: 0,
+    max: 100,
+  };
+
+  it('clips the bar to the range, with the colour at each end worked out between the stops', () => {
+    const scale = legendScale(legend, { min: 0, max: 25 });
+    // 25 is half way between black and mid-grey: #404040.
+    expect(scale.gradient).toBe('linear-gradient(to right, #000000 0.00%, #404040 100.00%)');
+    expect(legendScale(legend, { min: 25, max: 75 }).gradient).toBe(
+      'linear-gradient(to right, #404040 0.00%, #808080 50.00%, #c0c0c0 100.00%)',
+    );
+  });
+
+  it('takes the ends from the percentile file: the slope legend ends at 27°, not 89°', () => {
+    const slope = { id: 'slope', label: 'Slope', unit: '°' };
+    const range = legendRange('slope', { ...legend, max: 89.27 });
+    expect(range).toEqual({ min: 0, max: 27.1 });
+    expect(legendEnds(slope, range.min, range.max).high).toBe('Steep, risky 27°');
+    const elevation = { id: 'elevation', label: 'Elevation', unit: 'm' };
+    const e = legendRange('elevation', { ...legend, min: -7275.95, max: 7025.79 });
+    expect(legendEnds(elevation, e.min, e.max)).toEqual({
+      low: 'Low (crater floors) -5.2 km',
+      high: 'High (ridges) +4.4 km',
+    });
+  });
+
+  it('falls back to the manifest’s own ends for a layer without percentiles', () => {
+    expect(legendRange('roughness', { ...legend, min: 1, max: 9 })).toEqual({ min: 1, max: 9 });
   });
 });

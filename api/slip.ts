@@ -1,7 +1,7 @@
 /**
  * Vercel function: POST /api/slip. Reads one "launch slipped" text into the mission settings the
  * app already has, with Google's Gemini API (free tier, a Flash model), and returns
- * `{ reading }`. Approved CLAUDE.md exception (docs/LANDER_RULES.md decision log, 2026-11-12).
+ * `{ reading }`. Approved CLAUDE.md exception (docs/LANDER_RULES.md decision log).
  *
  * - The key lives only in GEMINI_API_KEY on the server (never a VITE_ variable).
  * - It accepts only `{ "text": string }` (1 to 500 characters) from the app's own origin.
@@ -23,7 +23,7 @@ export const SLIP_TEXT_MAX = 500;
 const BODY_MAX_BYTES = 4_000;
 /**
  * The whole job (one retry included) ends by then; the browser gives up at 22 s. The first live
- * test (2026-11-12) timed out at 9 s on ordinary sentences, with a 2.4 s cold start before it.
+ * test timed out at 9 s on ordinary sentences, with a 2.4 s cold start before it.
  */
 const DEADLINE_MS = 20_000;
 /** A retry starts only with at least this long left. */

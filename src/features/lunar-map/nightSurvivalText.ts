@@ -3,6 +3,7 @@
  * with its unit, the verdict from `nightSurvival`, and the battery needed here. The verdict and the
  * numbers come from src/services/landers.ts; this only says them. Pure.
  */
+import { formatHours } from '../../utils/time';
 import { BATTERY_WH_PER_KG } from '../../data/powerCheck';
 import {
   LANDER_FIELD_LABEL,
@@ -52,14 +53,14 @@ export function verdictDetail(result: NightSurvival, values: VerdictValues): str
   if (result.kind === 'cant-judge') {
     switch (result.cause) {
       case 'night-longer':
-        return `battery lasts ${tenthsDown(result.batteryHours ?? 0)} h (${division(values)}) vs at least ${result.darkHours ?? 0} h of darkness seen; the night runs past the dates checked`;
+        return `battery lasts ${tenthsDown(result.batteryHours ?? 0)} h (${division(values)}) vs at least ${formatHours(result.darkHours ?? 0)} of darkness seen; the night runs past the dates checked`;
       case 'not-published':
         return `Missing: ${result.missing.map((field) => LANDER_FIELD_LABEL[field]).join(', ')}.`;
       case 'no-lander':
         return 'No lander data is loaded for this site.';
     }
   }
-  const dark = `${result.darkAtLeast ? 'at least ' : ''}${result.darkHours} h`;
+  const dark = `${result.darkAtLeast ? 'at least ' : ''}${formatHours(result.darkHours ?? 0)}`;
   return `battery lasts ${tenthsDown(result.batteryHours)} h (${division(values)}) vs longest darkness ${dark}`;
 }
 
@@ -78,5 +79,56 @@ export function batteryNeededText(
   const atLeast = dark.atLeast ? 'at least ' : '';
   const whText = Math.ceil(wh - 1e-9).toLocaleString('en-US');
   const kgText = (Math.ceil(kg * 10 - 1e-9) / 10).toFixed(1);
-  return `Battery needed here: ${atLeast}${whText} Wh (${atLeast}${kgText} kg at ${BATTERY_WH_PER_KG} Wh/kg), for your ${loadW} W night load (set in Power details) over ${atLeast}${dark.hours} h of darkness.`;
+  return `Battery needed here: ${atLeast}${whText} Wh (${atLeast}${kgText} kg at ${BATTERY_WH_PER_KG} Wh/kg), for a ${loadW} W night load over ${atLeast}${formatHours(dark.hours)} of darkness.`;
+}
+
+/** One line on where a tag's value comes from, for the hover: the tag's meaning and its source. */
+export function tagSource(value: LanderValue): string {
+  const meaning: Record<LanderValue['tag'], string> = {
+    S: 'S: from an opened source',
+    'S*': 'S*: seen on a secondary page',
+    D: 'D: derived',
+    A: 'A: team assumption',
+    'not published': 'Not published: no source gives it',
+  };
+  const host = value.source ? value.source.replace(/^https?:\/\//, '').split('/')[0] : null;
+  return host ? `${meaning[value.tag]} (${host})` : meaning[value.tag];
+}
+
+/** "15.5 h", or a dash when the battery or night load is not published. */
+export function batteryLastsText(result: NightSurvival): string {
+  if (result.kind === 'cant-judge') {
+    return result.cause === 'night-longer' ? `${tenthsDown(result.batteryHours ?? 0)} h` : '–';
+  }
+  return `${tenthsDown(result.batteryHours)} h`;
+}
+
+/**
+ * The one verdict line. With no night in the dates nothing can be judged, so it never says
+ * "Survives" then.
+ */
+export function verdictLine(
+  result: NightSurvival,
+  dark: { hours: number; atLeast: boolean },
+): { kind: 'survives' | 'doesnt' | 'cant-judge'; text: string; short: string } {
+  const cant = (text: string) => ({ kind: 'cant-judge' as const, text, short: "Can't judge" });
+  if (dark.hours === 0) return cant("No night in these dates: can't judge");
+  if (result.kind === 'cant-judge') {
+    return cant(
+      result.cause === 'night-longer'
+        ? "Can't judge: the night runs past the dates checked"
+        : result.cause === 'no-lander'
+          ? "Can't judge: lander data not loaded"
+          : "Can't judge: battery or night load not published",
+    );
+  }
+  const night = `${result.darkAtLeast ? 'at least ' : ''}${formatHours(result.darkHours)}`;
+  if (result.kind === 'survives') {
+    return { kind: 'survives', text: `Survives the ${night} night`, short: 'Survives' };
+  }
+  return {
+    kind: 'doesnt',
+    text: `Does not survive: battery lasts ${tenthsDown(result.batteryHours)} h, night is ${night}`,
+    short: 'Does not survive',
+  };
 }

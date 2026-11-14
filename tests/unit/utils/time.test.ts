@@ -1,3 +1,4 @@
+import { formatHours } from '../../../src/utils/time';
 import { describe, expect, it } from 'vitest';
 import {
   addMonthsUtc,
@@ -23,6 +24,9 @@ import {
   toInputValues,
   windowStatus,
   windowStatusText,
+  formatClockShort,
+  goodTimeText,
+  plainDuration,
   formatWindowDays,
   formatWindowLength,
   formatWindowRange,
@@ -246,5 +250,40 @@ describe('addMonthsUtc', () => {
     expect(addMonthsUtc(Date.UTC(2026, 10, 15, 2), 2)).toBe(Date.UTC(2027, 0, 15, 2));
     expect(addMonthsUtc(Date.UTC(2027, 2, 31), -1)).toBe(Date.UTC(2027, 1, 28));
     expect(addMonthsUtc(Date.UTC(2026, 10, 15), 12)).toBe(Date.UTC(2027, 10, 15));
+  });
+});
+
+describe('formatHours', () => {
+  it('shows whole hours plainly and sixths of an hour to one decimal', () => {
+    expect(formatHours(169)).toBe('169 h');
+    expect(formatHours(168 + 5 / 6)).toBe('168.8 h');
+    expect(formatHours(1234)).toBe('1,234 h');
+    expect(formatHours(0)).toBe('0 h');
+  });
+});
+
+describe('the time bar’s plain words', () => {
+  const range = { start: Date.UTC(2026, 11, 24), end: Date.UTC(2026, 11, 27) };
+
+  it('writes the time as "Thu 24 Dec, 00:00 UTC"', () => {
+    expect(formatClockShort(Date.UTC(2026, 11, 24))).toBe('Thu 24 Dec, 00:00 UTC');
+  });
+
+  it('counts down in whole units', () => {
+    expect(plainDuration(11 * 3_600_000)).toBe('11 h');
+    expect(plainDuration((2 * 24 + 3) * 3_600_000)).toBe('2 d 3 h');
+    expect(plainDuration(2 * 24 * 3_600_000)).toBe('2 d');
+    expect(plainDuration(40 * 60_000)).toBe('40 min');
+  });
+
+  it('says when the good time starts, whether it is on now, or that there is none', () => {
+    const win = { start: Date.UTC(2026, 11, 24, 11), end: Date.UTC(2026, 11, 26, 14) };
+    expect(goodTimeText(windowStatus([win], range.start, range))).toBe(
+      'Good time to land starts in 11 h',
+    );
+    expect(goodTimeText(windowStatus([win], Date.UTC(2026, 11, 24, 11), range))).toBe(
+      'Good time to land now, ends in 2 d 3 h',
+    );
+    expect(goodTimeText(windowStatus([], range.start, range))).toBe('No good time in these dates');
   });
 });

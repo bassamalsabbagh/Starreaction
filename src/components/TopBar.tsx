@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import markUrl from '../assets/starreaction-mark.png';
 import styles from './TopBar.module.css';
 
 interface TopBarProps {
@@ -11,8 +10,8 @@ interface TopBarProps {
 }
 
 /**
- * The top row over the full-screen Moon: the logo, name and breadcrumb on the left, and the site
- * title quietly centred (About and the data credits are on the menu rail). The row itself lets the
+ * The top row over the full-screen Moon: the breadcrumb on the left, starting at "Moon" (the logo
+ * and name are at the top of the left panel), and the site title quietly centred. The row itself lets the
  * map through.
  */
 export function TopBar({ brand, product, breadcrumb }: TopBarProps) {
@@ -23,17 +22,6 @@ export function TopBar({ brand, product, breadcrumb }: TopBarProps) {
   return (
     <header ref={barRef} className={styles.bar}>
       <div ref={leftRef} className={styles.cluster}>
-        <p className={styles.brand}>
-          <img
-            className={styles.mark}
-            src={markUrl}
-            alt=""
-            width={40}
-            height={40}
-            decoding="async"
-          />
-          <span className={styles.brandName}>{brand}</span>
-        </p>
         {breadcrumb}
       </div>
       <h1 ref={titleRef} className={styles.title} data-crowded={crowded}>

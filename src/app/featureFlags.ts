@@ -13,3 +13,10 @@ export function enabledWhenOn(value: unknown): boolean {
  * and AI notice); the Mission form, the dates and the Delay buttons work without it.
  */
 export const SLIP_ASSISTANT_ENABLED: boolean = enabledWhenOn(import.meta.env.VITE_SLIP_ASSISTANT);
+
+/**
+ * The visibility prototype's Layers tile: shown only once its browser verification has passed
+ * (on since 2026-11-14 by team decision: Sun and Earth visibility are layers, no longer labelled
+ * a prototype). Not a build variable: set it here.
+ */
+export const VISIBILITY_VERIFIED: boolean = true;

@@ -95,6 +95,21 @@ export interface SkyAssessment {
   readonly bestWindow: TimeWindowMs | null;
 }
 
+/** A place in Compare: a past landing, or a point the user typed or clicked. */
+export interface ComparePlace {
+  readonly id: string;
+  readonly name: string;
+  readonly lat: number;
+  readonly lon: number;
+}
+
+/** One Compare column: the place and its checks (a past landing's RankedSite fits). */
+export interface CompareEntry {
+  readonly site: ComparePlace;
+  readonly assessment: SkyAssessment;
+  readonly rank: number | null;
+}
+
 export interface RankedSite {
   readonly site: Site;
   readonly assessment: SkyAssessment;

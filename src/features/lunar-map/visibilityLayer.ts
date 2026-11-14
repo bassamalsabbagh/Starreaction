@@ -1,6 +1,5 @@
 /**
- * The team's visibility prototype layer (docs/LANDER_RULES.md, "Visibility prototype layer (agreed
- * 2026-11-13)"; DATA_SOURCES SRC-074): which frame the app's time uses, the switches, the words,
+ * The team's visibility prototype layer (docs/LANDER_RULES.md, "Visibility prototype layer"; DATA_SOURCES SRC-074): which frame the app's time uses, the switches, the words,
  * the readout and the frame loading order. No Cesium import, so it stays testable. It never feeds a
  * check, the ranking or a verdict.
  */
@@ -18,13 +17,16 @@ const LAST_MS = Date.parse(FRAME_LAST_UTC);
 
 export const VISIBILITY_MANIFEST_URL = `${import.meta.env.BASE_URL}data/visibility-cap/manifest.json`;
 
-export const VISIBILITY_SWITCH_LABEL = 'Visibility (prototype)';
+export const VISIBILITY_SWITCH_LABEL = 'Visibility';
 export const TARGET_LABELS: Readonly<Record<VisibilityTarget, string>> = {
-  sun: 'Sun visibility (prototype)',
-  earth: 'Earth visibility (prototype)',
+  sun: 'Sun visibility',
+  earth: 'Earth visibility',
 };
+// "Prototype" dropped from the names on 2026-11-14 (team decision); the limits stay stated.
 export const VISIBILITY_LABEL =
-  'Prototype geometric visibility · 9.6 km grid · 2 m assumed height · eclipses not modeled';
+  'Geometric visibility · 9.6 km grid · 2 m assumed height · eclipses not modeled';
+// No check against NASA lighting maps has been done. The grids include terrain, so no "flat horizon".
+export const PREVIEW_LINE = 'Preview: not yet checked against NASA lighting maps.';
 export const VISIBILITY_MEANING =
   'Instantaneous geometric disc visibility: not a share of time lit, and not DSN link availability.';
 export const NO_FRAME_TEXT = 'No frame for this time (frames: 24 Nov–8 Dec 2026 UTC)';
@@ -86,8 +88,9 @@ export function visibilityDisplay(
   frame: string | null,
 ): VisibilityDisplay {
   const shown = shownTargets(settings);
+  // A target at 0% opacity is not drawn at all: it contributes nothing, exactly as when hidden.
   const setting = (target: VisibilityTarget): LayerSetting => ({
-    visible: frame !== null && shown.includes(target),
+    visible: frame !== null && shown.includes(target) && settings.opacity[target] > 0,
     opacity: settings.opacity[target],
   });
   return { load: settings.started, frame, sun: setting('sun'), earth: setting('earth') };

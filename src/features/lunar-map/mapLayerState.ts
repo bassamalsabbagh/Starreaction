@@ -6,6 +6,9 @@
  */
 import type { LayerReading, MapLayer } from '../../services/mapLayers';
 import type { DataStatus } from '../../services/sites';
+import legendRangeFile from '../../data/layers/legendRange.json';
+
+const LEGEND_RANGE = legendRangeFile as { layers: Record<string, { min: number; max: number }> };
 
 /** A layer's switch and opacity (0–1). */
 export interface LayerSetting {
@@ -73,7 +76,7 @@ export function layerDisplays(
       visible: setting?.visible ?? false,
       opacity: setting?.opacity ?? DEFAULT_LAYER_OPACITY,
       preview: plan.preview,
-      // A narrow or low-memory device keeps the previews only (previewsOnly).
+      // A phone keeps the low-resolution images only (previewsOnly).
       full: previewOnly ? [] : plan.full,
     };
   });
@@ -107,6 +110,10 @@ export function storedDecimals(layer: MapLayer): number {
 /** "12.28°", "0.00°", "−1234 m": the stored precision, the unit after it. */
 export function formatLayerValue(layer: MapLayer, value: number): string {
   const unit = layer.values?.encoding.unit ?? layer.unit;
+  if (layer.id === 'elevation' && unit === 'm') {
+    const km = (Math.round(value / 100) / 10).toFixed(1);
+    return `${value > 0 ? '+' : ''}${km} km`;
+  }
   const number = value.toFixed(storedDecimals(layer));
   return unit === '°' ? `${number}°` : `${number} ${unit}`;
 }
@@ -133,18 +140,76 @@ export function readingStatus(reading: LayerReading): DataStatus | null {
   return reading.pixelM <= 40 ? 'Real data' : 'Calculated';
 }
 
-/** The legend: a CSS gradient from the stops, and labelled ticks that don't crowd, 0–1 along. */
-export function legendScale(legend: NonNullable<MapLayer['legend']>): {
+/** A hex colour "#rrggbb" as numbers. */
+function rgb(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** The stops' colour at a value: straight-line between the two stops around it, the ends held. */
+function colourAt(stops: readonly { value: number; color: string }[], value: number): string {
+  const first = stops[0];
+  const last = stops[stops.length - 1];
+  if (!first || !last) return '#000000';
+  if (value <= first.value) return first.color;
+  if (value >= last.value) return last.color;
+  for (let i = 1; i < stops.length; i += 1) {
+    const upper = stops[i];
+    const lower = stops[i - 1];
+    if (upper && lower && value <= upper.value) {
+      const f = (value - lower.value) / (upper.value - lower.value || 1);
+      const [r0, g0, b0] = rgb(lower.color);
+      const [r1, g1, b1] = rgb(upper.color);
+      const mix = (x: number, y: number) => Math.round(x + (y - x) * f);
+      return `#${[mix(r0, r1), mix(g0, g1), mix(b0, b1)]
+        .map((c) => c.toString(16).padStart(2, '0'))
+        .join('')}`;
+    }
+  }
+  return last.color;
+}
+
+/**
+ * The legend's ends for a layer: the percentiles of the valid values (scripts/data/legend_range.py,
+ * src/data/layers/legendRange.json), not the single most extreme pixels the manifest records; the
+ * manifest's own minimum and maximum without a percentile file. Display only.
+ */
+export function legendRange(
+  layerId: string,
+  legend: NonNullable<MapLayer['legend']>,
+): { min: number; max: number } {
+  const own = LEGEND_RANGE.layers[layerId];
+  return own ? { min: own.min, max: own.max } : { min: legend.min, max: legend.max };
+}
+
+/**
+ * The legend: a CSS gradient from the stops and labelled ticks that don't crowd, 0-1 along. With a
+ * `range` the bar covers only that range (the stops clipped to it, the colour at each end worked
+ * out between its neighbours), so the ends and the colours agree.
+ */
+export function legendScale(
+  legend: NonNullable<MapLayer['legend']>,
+  range?: { min: number; max: number },
+): {
   gradient: string;
   ticks: { at: number; value: number }[];
 } {
-  const span = legend.max - legend.min || 1;
-  const at = (value: number) => Math.min(1, Math.max(0, (value - legend.min) / span));
-  const gradient = `linear-gradient(to right, ${legend.stops
+  const lo = range?.min ?? legend.min;
+  const hi = range?.max ?? legend.max;
+  const stops = range
+    ? [
+        { value: lo, color: colourAt(legend.stops, lo) },
+        ...legend.stops.filter((stop) => stop.value > lo && stop.value < hi),
+        { value: hi, color: colourAt(legend.stops, hi) },
+      ]
+    : legend.stops;
+  const span = hi - lo || 1;
+  const at = (value: number) => Math.min(1, Math.max(0, (value - lo) / span));
+  const gradient = `linear-gradient(to right, ${stops
     .map((stop) => `${stop.color} ${(at(stop.value) * 100).toFixed(2)}%`)
     .join(', ')})`;
   const ticks: { at: number; value: number }[] = [];
-  const values = [...legend.stops.map((stop) => stop.value), legend.max];
+  const values = [...stops.map((stop) => stop.value), hi];
   for (const value of values) {
     const place = at(value);
     const last = ticks[ticks.length - 1];
@@ -152,7 +217,7 @@ export function legendScale(legend: NonNullable<MapLayer['legend']>): {
   }
   // The maximum always closes the scale, even when it crowds the tick before it.
   const final = ticks[ticks.length - 1];
-  if (final && final.value !== legend.max) ticks[ticks.length - 1] = { at: 1, value: legend.max };
+  if (final && final.value !== hi) ticks[ticks.length - 1] = { at: 1, value: hi };
   return { gradient, ticks };
 }
 
@@ -174,9 +239,46 @@ export function unshadedBelowZ(
 }
 
 /**
- * Narrow or low-memory devices keep the 512 px previews only: both layers' full images are about
- * 300 MB decoded (a viewport under 900 px wide, or navigator.deviceMemory of 4 GB or less).
+ * Phones (a viewport under 600 px wide) keep the 512 px images only: both layers' full images are
+ * about 300 MB decoded. Laptops and tablets draw the full-resolution images; nothing is said.
  */
-export function previewsOnly(viewportWidth: number, deviceMemoryGb: number | undefined): boolean {
-  return viewportWidth < 900 || (deviceMemoryGb !== undefined && deviceMemoryGb <= 4);
+export function previewsOnly(viewportWidth: number): boolean {
+  return viewportWidth < 600;
+}
+
+/** The two ends of a legend, in words with the real (rounded) minimum and maximum. */
+export interface LegendEnds {
+  readonly low: string;
+  readonly high: string;
+}
+
+/** "+7.0 km" / "-7.3 km": metres to kilometres, one decimal, a plain minus. */
+function kilometres(metres: number, plus: boolean): string {
+  const km = (Math.round(metres / 100) / 10).toFixed(1);
+  return `${plus && metres > 0 ? '+' : ''}${km} km`;
+}
+
+/**
+ * Legend text for a map layer: only the two ends, with words ("Low (crater floors) -7.3 km" …
+ * "High (ridges) +7.0 km"), from the layer's real minimum and maximum. Layers without words of
+ * their own get the plain numbers and unit.
+ */
+export function legendEnds(
+  layer: Pick<MapLayer, 'id' | 'label' | 'unit'>,
+  min: number,
+  max: number,
+): LegendEnds {
+  if (layer.id === 'elevation') {
+    return {
+      low: `Low (crater floors) ${kilometres(min, false)}`,
+      high: `High (ridges) ${kilometres(max, true)}`,
+    };
+  }
+  if (layer.id === 'slope') {
+    return {
+      low: `Flat, safer to land ${Math.round(min)}°`,
+      high: `Steep, risky ${Math.round(max)}°`,
+    };
+  }
+  return { low: `${Math.round(min)} ${layer.unit}`, high: `${Math.round(max)} ${layer.unit}` };
 }

@@ -1,19 +1,20 @@
 import { useId } from 'react';
 import { StatusTag } from '../../components/StatusTag';
 import type { LayerReading, MapLayer } from '../../services/mapLayers';
+import { paletteGradient, VISIBILITY_PALETTE } from './visibilityPalette';
 import {
-  DEFAULT_LAYER_OPACITY,
+  legendEnds,
+  legendRange,
   legendScale,
   readingStatus,
-  storedDecimals,
   readoutText,
   type LayerSetting,
 } from './mapLayerState';
 import { VisibilityLayerItem, type VisibilityControls } from './VisibilityLayerItem';
 import {
   TARGET_LABELS,
-  VISIBILITY_MEANING,
-  shownTargets,
+  UNAVAILABLE_TEXT,
+  VISIBILITY_TARGETS,
   type VisibilityReadout,
   type VisibilityTarget,
 } from './visibilityLayer';
@@ -23,31 +24,22 @@ interface LayerPanelProps {
   layers: readonly MapLayer[];
   settings: Readonly<Record<string, LayerSetting>>;
   onToggle: (layerId: string) => void;
-  onOpacity: (layerId: string, opacity: number) => void;
-  /** The layer the readout reads (null when none is visible). */
-  activeId: string | null;
-  onActive: (layerId: string) => void;
-  /** The active layer's value at the pointed or tapped spot, or null before there is one. */
-  reading: LayerReading | null;
+  /** Each layer's value at the pointed or tapped spot, by layer id (none before there is one). */
+  readings: Readonly<Record<string, LayerReading>>;
   onClose: () => void;
-  /** The manifest's source id ("SRC-073"). */
-  sourceId: string;
-  /** Only the 512 px previews are drawn on this device. */
-  previewOnly?: boolean;
   /** Layers some of whose images could not be loaded. */
   failedIds?: readonly string[];
   /**
-   * The visibility prototype layer: its controls, which target the readings follow (null when a
-   * map layer's), picking one, and its readout.
+   * The Sun and Earth visibility layers: their controls, which target the readings follow (null
+   * when a map layer's) and their readout.
    */
   visibility?: VisibilityControls & {
     activeTarget: VisibilityTarget | null;
-    onActiveTarget: (target: VisibilityTarget) => void;
     readout: VisibilityReadout | null;
   };
 }
 
-/** The legend under a visible layer: a continuous bar from the team's colours, or why there is none. */
+/** The legend: a colour bar with its two ends in words, or why there is none. */
 function Legend({ layer }: { layer: MapLayer }) {
   if (!layer.legend) {
     return (
@@ -56,59 +48,56 @@ function Legend({ layer }: { layer: MapLayer }) {
       </p>
     );
   }
-  const scale = legendScale(layer.legend);
+  const range = legendRange(layer.id, layer.legend);
+  const scale = legendScale(layer.legend, range);
+  const ends = legendEnds(layer, range.min, range.max);
   return (
     <figure className={styles.legend} aria-label={`${layer.label} legend, ${layer.unit}`}>
       <div className={styles.bar} style={{ background: scale.gradient }} aria-hidden="true" />
-      <div className={styles.ticks}>
-        {scale.ticks.map((tick) => (
-          <span key={tick.value} className={styles.tick} style={{ left: `${tick.at * 100}%` }}>
-            {tick.value.toFixed(storedDecimals(layer))}
-          </span>
-        ))}
+      <div className={styles.ends}>
+        <span>{ends.low}</span>
+        <span>{ends.high}</span>
       </div>
-      <figcaption className={styles.unit}>
-        {layer.label} ({layer.unit})
-      </figcaption>
     </figure>
   );
 }
 
 /**
- * The map's layers (docs/LANDER_RULES.md, "Map layers: elevation and slope"): for each, a switch,
- * an opacity slider and a legend; which layer the readout reads; and the readout itself, read from
- * the value tiles (never from a colour). Elevation and slope are fixed in time; the visibility
- * prototype (VisibilityLayerItem) follows the app's time, one supplied frame at a time.
+ * The map's layers: one row of small colour tiles with a name each, that switch a layer on or off
+ * (at a fixed 80% opacity). The legend of a layer that is on sits directly under the row; the value under the pointer or tap shows at the foot when there is one. The
+ * explanations, sources and limits are on the About page.
  */
 export function LayerPanel({
   layers,
   settings,
   onToggle,
-  onOpacity,
-  activeId,
-  onActive,
-  reading,
+  readings,
   onClose,
-  sourceId,
-  previewOnly = false,
   failedIds = [],
   visibility,
 }: LayerPanelProps) {
   const baseId = useId();
-  const visible = layers.filter((layer) => settings[layer.id]?.visible);
-  const targets = visibility ? shownTargets(visibility.settings) : [];
-  const active = layers.find((layer) => layer.id === activeId) ?? null;
-  const status = reading ? readingStatus(reading) : null;
+  const unavailable = visibility?.runtime.status === 'unavailable';
+  // One readout line for every layer that is on (a value only; no "No data" or prompt lines).
+  const readoutLines = layers.flatMap((layer) => {
+    const reading = settings[layer.id]?.visible ? readings[layer.id] : undefined;
+    return reading?.kind === 'value' ? [{ layer, reading }] : [];
+  });
+  const visibilityReadout =
+    visibility?.activeTarget && visibility.readout?.main.startsWith('Approx.')
+      ? visibility.readout
+      : null;
   return (
     <section className={styles.panel} aria-labelledby={`${baseId}-title`}>
       <header className={styles.head}>
         <h2 id={`${baseId}-title`} className={styles.title}>
-          Map layers
+          Layers
         </h2>
         <button
           type="button"
           className={styles.close}
           aria-label="Close map layers"
+          title="Close (Esc)"
           onClick={onClose}
         >
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -119,107 +108,104 @@ export function LayerPanel({
               strokeLinecap="round"
             />
           </svg>
+          <span aria-hidden="true">Close</span>
         </button>
       </header>
 
-      <ul className={styles.layers}>
+      {/* Above the row: the legend of each layer that is on, and the value under the pointer. */}
+      {layers
+        .filter((layer) => settings[layer.id]?.visible)
+        .map((layer) => (
+          <div key={layer.id} className={styles.legendBlock}>
+            <Legend layer={layer} />
+            {failedIds.includes(layer.id) ? (
+              <p className={styles.error} role="alert">
+                Couldn’t load the {layer.label.toLowerCase()} images. Switch the layer off and on to
+                try again.
+              </p>
+            ) : null}
+          </div>
+        ))}
+      {visibility && visibility.settings.on && !unavailable ? (
+        <div className={styles.legendBlock}>
+          <VisibilityLayerItem
+            target={visibility.settings.active}
+            runtime={visibility.runtime}
+            frame={visibility.frame}
+          />
+        </div>
+      ) : null}
+      {readoutLines.length > 0 || visibilityReadout ? (
+        <div className={styles.readout} aria-live="polite" data-testid="layer-readout">
+          {readoutLines.map(({ layer, reading }) => {
+            const status = readingStatus(reading);
+            return (
+              <p key={layer.id} className={styles.readoutLine} data-testid={`readout-${layer.id}`}>
+                {readoutText(layer, reading)}
+                {status ? <StatusTag>{status}</StatusTag> : null}
+              </p>
+            );
+          })}
+          {visibilityReadout ? (
+            <p className={styles.readoutLine} data-testid="visibility-readout">
+              {visibilityReadout.main}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <ul className={styles.rows} aria-label="Layers to show">
         {layers.map((layer) => {
-          const setting = settings[layer.id];
-          const on = setting?.visible ?? false;
-          const opacity = Math.round((setting?.opacity ?? DEFAULT_LAYER_OPACITY) * 100);
+          const on = settings[layer.id]?.visible ?? false;
           return (
-            <li key={layer.id} className={styles.layer}>
-              <label className={styles.toggle}>
-                <input type="checkbox" checked={on} onChange={() => onToggle(layer.id)} />
-                {layer.label}
-              </label>
-              <label className={styles.opacity}>
-                <span>Opacity {opacity}%</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={opacity}
-                  aria-label={`${layer.label} opacity`}
-                  onChange={(event) => onOpacity(layer.id, Number(event.target.value) / 100)}
+            <li key={layer.id} className={styles.rowItem}>
+              <button
+                type="button"
+                className={styles.rowButton}
+                aria-pressed={on}
+                onClick={() => onToggle(layer.id)}
+              >
+                <span
+                  className={styles.swatch}
+                  style={{
+                    background: layer.legend ? legendScale(layer.legend).gradient : undefined,
+                  }}
+                  aria-hidden="true"
                 />
-              </label>
-              {on ? <Legend layer={layer} /> : null}
-              {failedIds.includes(layer.id) ? (
-                <p className={styles.error} role="alert">
-                  Couldn’t load the layer images. Switch the layer off and on to try again.
-                </p>
-              ) : null}
+                <span className={styles.rowName}>{layer.label}</span>
+              </button>
             </li>
           );
         })}
-        {visibility ? <VisibilityLayerItem {...visibility} /> : null}
+        {visibility
+          ? VISIBILITY_TARGETS.map((target) => {
+              const on =
+                visibility.settings.on && visibility.settings.active === target && !unavailable;
+              return (
+                <li key={target} className={styles.rowItem}>
+                  <button
+                    type="button"
+                    className={styles.rowButton}
+                    aria-pressed={on}
+                    disabled={unavailable}
+                    onClick={() => visibility.onShow(target)}
+                  >
+                    <span
+                      className={styles.swatch}
+                      style={{ background: paletteGradient(VISIBILITY_PALETTE[target]) }}
+                      aria-hidden="true"
+                    />
+                    <span className={styles.rowName}>{TARGET_LABELS[target]}</span>
+                    <span className={styles.previewPill}>
+                      <StatusTag>Preview</StatusTag>
+                    </span>
+                  </button>
+                </li>
+              );
+            })
+          : null}
       </ul>
 
-      {visible.length > 0 || targets.length > 0 ? (
-        <fieldset className={styles.active}>
-          <legend className={styles.label}>Readings from</legend>
-          {visible.map((layer) => (
-            <label key={layer.id} className={styles.choice}>
-              <input
-                type="radio"
-                name={`${baseId}-active`}
-                checked={layer.id === activeId}
-                onChange={() => onActive(layer.id)}
-              />
-              {layer.label}
-            </label>
-          ))}
-          {targets.map((target) => (
-            <label key={target} className={styles.choice}>
-              <input
-                type="radio"
-                name={`${baseId}-active`}
-                checked={target === visibility?.activeTarget}
-                onChange={() => visibility?.onActiveTarget(target)}
-              />
-              {TARGET_LABELS[target]}
-            </label>
-          ))}
-        </fieldset>
-      ) : null}
-
-      {active ? (
-        <p className={styles.readout} aria-live="polite" data-testid="layer-readout">
-          {reading ? (
-            <>
-              {readoutText(active, reading)}
-              {status ? <StatusTag>{status}</StatusTag> : null}
-            </>
-          ) : (
-            `Point at the south pole, or tap it, to read the ${active.label.toLowerCase()}.`
-          )}
-        </p>
-      ) : visibility?.activeTarget && visibility.readout ? (
-        <div className={styles.readout} aria-live="polite" data-testid="visibility-readout">
-          <p className={styles.readoutLine}>{visibility.readout.main}</p>
-          {visibility.readout.detail ? (
-            <p className={styles.readoutDetail}>{visibility.readout.detail}</p>
-          ) : null}
-          <p className={styles.readoutDetail}>{VISIBILITY_MEANING}</p>
-        </div>
-      ) : null}
-
-      {previewOnly ? (
-        <p className={styles.note}>
-          Preview resolution on this device: the full images need more memory than a phone has.
-        </p>
-      ) : null}
-      <p className={styles.note}>Slope: average over one pixel (160 m or 40 m), not a pass/fail.</p>
-      <p className={styles.note}>
-        160 m readings are the mean of 16 pixels and can differ from the colour under the cursor.
-      </p>
-      <p className={styles.note}>
-        Source: Team raster ({sourceId}; origin to be recorded). Real data at 40 m; Calculated at
-        160 m (the mean of 4 × 4 pixels). Covers 80° S to the pole; elevation and slope don’t change
-        with the time.
-      </p>
+      {unavailable ? <p className={styles.note}>{UNAVAILABLE_TEXT}</p> : null}
     </section>
   );
 }

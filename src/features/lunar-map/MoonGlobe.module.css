@@ -83,10 +83,10 @@
   z-index: 20;
   max-width: 18rem;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--light-panel-edge);
   border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--light-panel-fill);
+  color: var(--light-text);
   font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
   box-shadow: var(--shadow-pop);
@@ -133,10 +133,10 @@
   top: 0;
   left: calc(var(--beacon-size) / 2 + var(--space-1));
   padding: 0.125rem var(--space-2);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--light-panel-edge);
   border-radius: var(--radius-sm);
-  background: var(--glass-fill);
-  color: var(--color-text);
+  background: var(--light-panel-fill);
+  color: var(--light-text);
   font-size: var(--font-size-caption);
   font-weight: 600;
   line-height: 1.4;
@@ -215,4 +215,11 @@
 /* Cesium's own credit bar (with its ion logo) is not shown; "Data sources" carries the credit. */
 .cesiumCredits {
   display: none;
+}
+
+/* Phones: the zoom readout gives way, so the time bar has the width it needs. */
+@media (max-width: 599px) {
+  .readoutCorner {
+    display: none;
+  }
 }

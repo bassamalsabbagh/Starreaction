@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
   cleanup,
@@ -29,26 +30,19 @@ function renderPanel(
   settings: Record<string, LayerSetting>,
   options: {
     layers?: readonly MapLayer[];
-    activeId?: string | null;
-    reading?: LayerReading | null;
-    previewOnly?: boolean;
+    readings?: Record<string, LayerReading>;
     failedIds?: string[];
   } = {},
 ) {
   const props = {
     onToggle: vi.fn(),
-    onOpacity: vi.fn(),
-    onActive: vi.fn(),
     onClose: vi.fn(),
   };
   render(
     <LayerPanel
       layers={options.layers ?? LAYERS}
       settings={settings}
-      activeId={options.activeId ?? null}
-      reading={options.reading ?? null}
-      sourceId="SRC-073"
-      previewOnly={options.previewOnly}
+      readings={options.readings ?? {}}
       failedIds={options.failedIds}
       {...props}
     />,
@@ -57,45 +51,55 @@ function renderPanel(
 }
 
 describe.runIf(LAYERS.length > 0)('LayerPanel', () => {
-  it('has a switch and an opacity slider for every layer', () => {
+  it('has a tile for every layer that switches it; no slider, no sources link, no radios', () => {
     const props = renderPanel({});
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Slope' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Slope' }));
     expect(props.onToggle).toHaveBeenCalledWith('slope');
-    fireEvent.change(screen.getByRole('slider', { name: 'Elevation opacity' }), {
-      target: { value: '40' },
-    });
-    expect(props.onOpacity).toHaveBeenCalledWith('elevation', 0.4);
-    expect(screen.getByRole('checkbox', { name: 'Elevation' })).not.toBeChecked();
-    // Nothing is switched on: no legend, no readings selector.
+    expect(screen.getByRole('button', { name: 'Elevation' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.queryByRole('slider')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sources' })).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+    // Nothing is switched on: no legend.
     expect(screen.queryByRole('figure')).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Readings from' })).toBeNull();
+    // Elevation and Slope carry no Preview badge.
+    expect(screen.queryByText('Preview')).toBeNull();
   });
 
-  it('shows the slope legend in degrees and the elevation legend in metres', () => {
+  it('shows a legend under the row for each layer that is on, with only its two ends in words', () => {
     renderPanel({
       slope: { visible: true, opacity: 0.8 },
-      elevation: { visible: true, opacity: 0.6 },
+      elevation: { visible: true, opacity: 0.8 },
     });
+    expect(screen.getAllByRole('figure')).toHaveLength(2);
+    const legend = screen.getByRole('figure', { name: 'Elevation legend, m' });
+    expect(legend).toHaveTextContent('Low (crater floors) -5.2 km');
+    expect(legend).toHaveTextContent('High (ridges) +4.4 km');
+    // No tick numbers in between, so none can overlap.
+    expect(legend.querySelectorAll('span')).toHaveLength(2);
+    // No explanation lines, no Preview badges, no sources: those are on the About page.
+    expect(screen.queryByText(/South pole only/)).toBeNull();
+    expect(screen.queryByText(/Slope is not a pass\/fail/)).toBeNull();
+    expect(screen.queryByText(/Source/)).toBeNull();
+    expect(screen.queryByText('Preview')).toBeNull();
+  });
+
+  it('lays the layers out in one row of small colour tiles with a name each', () => {
+    renderPanel({});
+    const row = screen.getByRole('list', { name: 'Layers to show' });
+    const buttons = within(row).getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual(['Elevation', 'Slope']);
+    const css = readFileSync('src/features/lunar-map/LayerPanel.module.css', 'utf8');
+    expect(css.match(/\.rows \{([^}]*)\}/)?.[1] ?? '').toMatch(/flex-flow: row wrap/);
+  });
+
+  it('words the slope legend from its real maximum', () => {
+    renderPanel({ slope: { visible: true, opacity: 0.8 } });
     const legend = screen.getByRole('figure', { name: 'Slope legend, °' });
-    expect(legend).toHaveTextContent('Slope (°)');
-    expect(legend).toHaveTextContent(/^0.*/);
-    const elevation = screen.getByRole('figure', { name: 'Elevation legend, m' });
-    expect(elevation).toHaveTextContent('Elevation (m)');
-    // Labels at the stored precision (whole metres), negative and positive.
-    expect(elevation).toHaveTextContent('-7000');
-    expect(elevation).toHaveTextContent(/7026Elevation \(m\)$/);
-    expect(screen.queryByText(/Legend unavailable/)).toBeNull();
-    expect(screen.getByRole('slider', { name: 'Elevation opacity' })).toHaveValue('60');
-    expect(
-      screen.getByText('Slope: average over one pixel (160 m or 40 m), not a pass/fail.'),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Team raster \(SRC-073; origin to be recorded\)/)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        '160 m readings are the mean of 16 pixels and can differ from the colour under the cursor.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/Preview resolution on this device/)).toBeNull();
+    expect(legend).toHaveTextContent('Flat, safer to land 0°');
+    expect(legend).toHaveTextContent('Steep, risky 27°');
   });
 
   it('says why a layer without values has no legend (a made-up empty file)', () => {
@@ -108,30 +112,41 @@ describe.runIf(LAYERS.length > 0)('LayerPanel', () => {
     );
   });
 
-  it('says when a layer’s images failed, and when only previews are drawn on this device', () => {
-    renderPanel(
-      { slope: { visible: true, opacity: 0.8 } },
-      { previewOnly: true, failedIds: ['slope'] },
-    );
-    expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load the layer images');
-    expect(screen.getByText(/^Preview resolution on this device/)).toBeInTheDocument();
+  it('says when a layer’s images failed, and never mentions memory or resolution', () => {
+    renderPanel({ slope: { visible: true, opacity: 0.8 } }, { failedIds: ['slope'] });
+    expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load the slope images');
+    expect(screen.queryByText(/Preview resolution on this device|memory/)).toBeNull();
   });
 
-  it('chooses the layer readings come from, and reads a value with its status', () => {
-    const props = renderPanel(
+  it('shows one readout line for every layer that is on, each with its status tag', () => {
+    renderPanel(
       { slope: { visible: true, opacity: 0.8 }, elevation: { visible: true, opacity: 0.8 } },
       {
-        activeId: 'slope',
-        reading: { kind: 'value', value: 12.28, unit: '°', levelId: 'im1', pixelM: 40 },
+        readings: {
+          elevation: { kind: 'value', value: 1234, unit: 'm', levelId: 'base', pixelM: 160 },
+          slope: { kind: 'value', value: 19.45, unit: '°', levelId: 'base', pixelM: 160 },
+        },
       },
     );
-    const group = screen.getByRole('group', { name: 'Readings from' });
-    expect(within(group).getByRole('radio', { name: 'Slope' })).toBeChecked();
-    fireEvent.click(within(group).getByRole('radio', { name: 'Elevation' }));
-    expect(props.onActive).toHaveBeenCalledWith('elevation');
-    const readout = screen.getByTestId('layer-readout');
-    expect(readout).toHaveAttribute('aria-live', 'polite');
-    expect(readout).toHaveTextContent('Slope 12.28° · 40 mReal data');
+    expect(screen.queryByRole('group', { name: 'Readings from' })).toBeNull();
+    expect(screen.getByTestId('readout-elevation')).toHaveTextContent(
+      'Elevation +1.2 km · 160 mCalculated',
+    );
+    expect(screen.getByTestId('readout-slope')).toHaveTextContent('Slope 19.45° · 160 mCalculated');
+    expect(screen.getByTestId('layer-readout')).toHaveAttribute('aria-live', 'polite');
+    cleanup();
+    // A layer that is off has no line; a reading that is not a value (no data) has none either.
+    renderPanel(
+      { slope: { visible: true, opacity: 0.8 } },
+      {
+        readings: {
+          elevation: { kind: 'value', value: 5, unit: 'm', levelId: 'base', pixelM: 160 },
+          slope: { kind: 'nodata', levelId: 'base', pixelM: 160 },
+        },
+      },
+    );
+    expect(screen.queryByTestId('layer-readout')).toBeNull();
+    expect(screen.queryByText(/No data/)).toBeNull();
   });
 });
 
@@ -169,7 +184,7 @@ describe.runIf(LAYERS.length > 0)('ElevationLine (the place card)', () => {
     expect(line).toHaveTextContent(
       'Slope: average over one pixel (160 m or 40 m), not a pass/fail.',
     );
-    expect(line).toHaveTextContent('Team raster (SRC-073; origin to be recorded)');
+    expect(line).not.toHaveTextContent(/Team raster|SRC-/);
     vi.unstubAllGlobals();
   });
 

@@ -152,3 +152,29 @@ describe.runIf(HAS_DATA)('visibility frames on disk', () => {
     expect(sampleVisibility(last, 0, -90)).toBe(0);
   });
 });
+
+describe.runIf(HAS_DATA)('the manifest palette metadata', () => {
+  it('describes the same per-target palettes and transparency as the PNGs and the legends', () => {
+    const palette = JSON.parse(readFileSync('src/data/visibility/palette.json', 'utf8')) as {
+      alpha: { zero: number; min: number; max: number };
+      sun: { stops: { value: number; color: string }[] };
+      earth: { stops: { value: number; color: string }[] };
+    };
+    const manifest = read<{
+      colors: Record<string, Record<string, string>>;
+      alpha: { value_zero: number; value_min: number; value_max: number; rule: string };
+    }>('manifest.json');
+    for (const target of ['sun', 'earth'] as const) {
+      const expected = Object.fromEntries(
+        palette[target].stops.map((stop) => [String(stop.value), stop.color]),
+      );
+      expect(manifest.colors[target]).toEqual(expected);
+    }
+    expect(manifest.alpha).toMatchObject({
+      value_zero: palette.alpha.zero,
+      value_min: palette.alpha.min,
+      value_max: palette.alpha.max,
+    });
+    expect(manifest.alpha.rule).toMatch(/multiplied by the layer opacity/);
+  });
+});

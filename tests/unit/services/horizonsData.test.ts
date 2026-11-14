@@ -10,7 +10,7 @@ import {
   positionsSource,
   readHorizonsIndex,
   shareAbove,
-  siteHourlySky,
+  siteSamples,
   YEAR_RANGE,
   type HorizonsIndex,
   type HorizonsSeries,
@@ -126,7 +126,7 @@ describe('horizonsSky', () => {
   });
 });
 
-describe('siteHourlySky', () => {
+describe('siteSamples', () => {
   const site = { lat: -80.13, lon: 1.44 };
   const values = Array.from({ length: 13 }, (_, i) => i);
   const s = series({
@@ -136,32 +136,42 @@ describe('siteHourlySky', () => {
     earthEl: values.map(() => 5),
   });
 
-  it('uses Horizons where it covers an hour and the engine elsewhere', () => {
+  it('uses every 10-minute Horizons sample where it covers, and the engine hourly elsewhere', () => {
     const range = { start: START - HOUR, end: START + 3 * HOUR };
-    const { samples, fromHorizons } = siteHourlySky(s, site, range);
+    const { samples, fromHorizons } = siteSamples(s, site, range);
+    // The hour before the series from the engine, then all 13 stored samples (START to +120 min).
     expect(samples.map((sample) => sample.t)).toEqual([
       START - HOUR,
-      START,
-      START + HOUR,
-      START + 2 * HOUR,
+      ...Array.from({ length: 13 }, (_, i) => START + i * STEP),
     ]);
-    // Hours 0, 1 and 2 are covered (the series runs to START + 120 min).
-    expect(fromHorizons).toBe(3);
+    expect(fromHorizons).toBe(13);
+    // Each sample says how long it stands for: an hour (the engine) or 10 minutes (Horizons).
+    expect(samples[0]?.stepMs).toBeUndefined();
+    expect(samples.slice(1).every((sample) => sample.stepMs === STEP)).toBe(true);
     const at = (i: number) => {
       const sample = samples[i];
       if (!sample) throw new Error('missing');
       return azimuthElevationOf(sample.sun, site).elevation;
     };
     expect(at(1)).toBeCloseTo(0, 6);
-    expect(at(2)).toBeCloseTo(6, 6);
-    expect(at(3)).toBeCloseTo(12, 6);
+    expect(at(2)).toBeCloseTo(1, 6);
+    expect(at(7)).toBeCloseTo(6, 6);
+    expect(at(13)).toBeCloseTo(12, 6);
     // The hour before the series comes from the engine, unchanged.
     expect(samples[0]?.sun).toEqual(hourlySky({ start: START - HOUR, end: START })[0]?.sun);
   });
 
+  it('stops an engine hour where the series starts, so no time is counted twice', () => {
+    const range = { start: START - 30 * 60_000, end: START + 20 * 60_000 };
+    const { samples } = siteSamples(s, site, range);
+    // The range starts mid-hour: the engine has no whole hour before the series, so the first
+    // sample is the series' own.
+    expect(samples.map((sample) => sample.t)).toEqual([START, START + STEP]);
+  });
+
   it('is the engine alone without a series', () => {
     const range = { start: START, end: START + 2 * HOUR };
-    expect(siteHourlySky(null, site, range)).toEqual({
+    expect(siteSamples(null, site, range)).toEqual({
       samples: hourlySky(range),
       fromHorizons: 0,
     });

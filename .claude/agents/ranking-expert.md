@@ -39,7 +39,7 @@ Each check, threshold, ranking measure and data value must carry one of these la
 - Don't implement a check or ranking measure in production code until it is written in
   `docs/LANDER_RULES.md`. Before that, you may only **propose** it.
 - **No weighted scores.** Never combine measures with weights, normalised scores or points (the
-  weighted score was retired on 2026-11-11; see the decision log). Rank by measured values in real
+  weighted score was retired; see the decision log). Rank by measured values in real
   units, such as the usable window in days or % of mission needs met.
 - The slope check uses only real LOLA data prepared offline (`scripts/data/`) with sources in
   `docs/DATA_SOURCES.md`, never demo values.

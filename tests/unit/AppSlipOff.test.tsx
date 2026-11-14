@@ -21,43 +21,11 @@ function railItem(name: string) {
 }
 
 describe('App as built: the "Launch slipped?" assistant is off by default', () => {
-  it('renders no assistant box or examples; the mission form still works', () => {
+  it('renders no assistant box or examples anywhere in the plan', () => {
     render(<App />);
-    fireEvent.click(railItem('Mission'));
-    const mission = screen.getByRole('region', { name: 'Mission' });
-    expect(within(mission).queryByRole('region', { name: 'Launch slipped?' })).toBeNull();
-    expect(within(mission).queryByRole('group', { name: 'Examples to try' })).toBeNull();
-    expect(within(mission).queryByText(/Launch slipped/)).toBeNull();
-
-    fireEvent.click(within(mission).getByRole('button', { name: 'Add your own mission' }));
-    const form = screen.getByRole('region', { name: 'Add your own mission' });
-    fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), {
-      target: { value: 'By hand' },
-    });
-    fireEvent.click(within(form).getByRole('button', { name: 'Use without saving' }));
-    // The form closes back to the Mission view, with the new mission picked.
-    expect(
-      within(screen.getByRole('combobox', { name: 'Mission' })).getByRole('option', {
-        selected: true,
-      }),
-    ).toHaveTextContent('By hand · Custom');
-  });
-
-  it('keeps the dates to check and the Delay buttons working without it', () => {
-    render(<App />);
-    fireEvent.click(railItem('Mission'));
-    const dates = within(screen.getByRole('region', { name: 'Mission' })).getByRole('region', {
-      name: 'Dates to check',
-    });
-    fireEvent.change(within(dates).getByLabelText('Start (UTC)'), {
-      target: { value: '2026-12-12' },
-    });
-    fireEvent.change(within(dates).getByLabelText('Stop (UTC)'), {
-      target: { value: '2026-12-25' },
-    });
-    expect(dates).toHaveTextContent('Checking 12 Dec 2026 to 25 Dec 2026 (UTC)');
-    fireEvent.click(within(dates).getByRole('button', { name: 'Delay 1 week' }));
-    expect(dates).toHaveTextContent('Checking 19 Dec 2026 to 1 Jan 2027 (UTC)');
+    expect(screen.queryByRole('region', { name: 'Launch slipped?' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Examples to try' })).toBeNull();
+    expect(screen.queryByText(/Launch slipped/)).toBeNull();
   });
 
   it('leaves the assistant out of About: no guide line, no AI notice', () => {

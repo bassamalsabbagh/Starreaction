@@ -250,7 +250,7 @@ Play leads (round, off-white), then the speeds (1 h/s, 6 h/s, 1 day/s; the selec
 
 ### Point pin and point card ("Anywhere on the Moon")
 
-Site **beacons** are green (`--color-pin-pass`) when the site passes every check for the dates checked, and red (`--color-pin-fail`) when it doesn't (since 2026-11-13; they were off-white and grey). Suitable beacons carry their rank number; unsuitable ones are a smaller dot with no number. The hover text gives the verdict in words, so colour is never the only signal.
+Site **beacons** are green (`--color-pin-pass`) when the site passes every check for the dates checked, and red (`--color-pin-fail`) when it doesn't (they were off-white and grey). Suitable beacons carry their rank number; unsuitable ones are a smaller dot with no number. The hover text gives the verdict in words, so colour is never the only signal.
 
 A click on bare Moon (not a beacon), or typed coordinates, drops a **pin**: a 22px orange ring with a centre dot, the dark halo on both sides, and a "Your point" tag; it stays at full strength near the rim like the selection ring. The cursor is a crosshair over the ground. The panel opens the same **place card** a site gets, named by its coordinates ("12.4° N, 31.8° W") with the nearest landing site as a quiet underlined link.
 

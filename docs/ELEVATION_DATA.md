@@ -1,6 +1,6 @@
 # South-pole elevation data: loading the first real file
 
-> **Superseded for the map layers (2026-11-13):** the elevation and slope layers and their readout
+> **Superseded for the map layers:** the elevation and slope layers and their readout
 > now come from the team's rasters through `scripts/data/make_map_layers.py`; see
 > `docs/MAP_LAYERS.md`. This page describes the earlier single-grid path, kept for reference.
 

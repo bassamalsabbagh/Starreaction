@@ -66,7 +66,7 @@ describe('yearFacts (docs/LANDER_RULES.md, "Light, water and Earth over the year
       label: 'Earth above the horizon in 2027',
       value: '100.0% of 2027',
       status: 'Calculated',
-      source: 'JPL Horizons (SRC-055), 2027, flat horizon',
+      source: 'JPL Horizons, 2027, flat horizon',
     });
     expect(byId(yearFacts(NORTH, series(-5), null), 'earth')?.value).toBe('0.0% of 2027');
     // A made-up terrain horizon 10° high: the Earth at 5° is behind it all year.
@@ -78,7 +78,7 @@ describe('yearFacts (docs/LANDER_RULES.md, "Light, water and Earth over the year
     };
     expect(byId(yearFacts(POLAR, series(5), ridge), 'earth')).toMatchObject({
       value: '0.0% of 2027',
-      source: 'JPL Horizons (SRC-055), 2027, terrain horizon',
+      source: 'JPL Horizons, 2027, terrain horizon',
     });
   });
 });

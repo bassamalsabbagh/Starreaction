@@ -12,7 +12,7 @@ import {
   type SkyAssessment,
 } from '../../data/demoData';
 import { terrainProfileFor } from '../../data/terrainPatches';
-import { siteHourlySky, type HorizonsSeries } from '../../services/horizonsData';
+import { siteSamples, type HorizonsSeries } from '../../services/horizonsData';
 import type { Site } from '../../services/sites';
 import {
   SLIP_MONTHS,
@@ -260,7 +260,7 @@ export function answerQuestion(question: SlipQuestion, context: SlipAnswerContex
   const { span, how } = read;
   const skyOf = (site: Site) =>
     siteSky(
-      siteHourlySky(context.series?.get(site.id) ?? null, site, sampledSpan(span)).samples,
+      siteSamples(context.series?.get(site.id) ?? null, site, sampledSpan(span)).samples,
       site,
       mission,
       span,

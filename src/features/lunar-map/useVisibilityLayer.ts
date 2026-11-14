@@ -50,6 +50,19 @@ export function useVisibilityLayer(time: number) {
     setSettings((current) => ({ ...current, active: target }));
     setPrefer(target);
   };
+  /**
+   * A Layers tile: shows this overlay (the other one goes, one at a time), or switches it off when
+   * it is the one showing.
+   */
+  const show = (target: VisibilityTarget) => {
+    if (runtime.status === 'unavailable') return;
+    if (settings.on && settings.active === target) {
+      setSettings((current) => ({ ...current, on: false }));
+      return;
+    }
+    setSettings((current) => ({ ...current, on: true, started: true, active: target }));
+    setPrefer(target);
+  };
   const setOpacity = (target: VisibilityTarget, opacity: number) =>
     setSettings((current) => ({ ...current, opacity: { ...current.opacity, [target]: opacity } }));
 
@@ -69,6 +82,7 @@ export function useVisibilityLayer(time: number) {
     shown,
     prefer,
     toggle,
+    show,
     choose,
     setOpacity,
     setPrefer,

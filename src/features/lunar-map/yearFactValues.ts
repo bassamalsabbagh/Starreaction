@@ -49,7 +49,7 @@ export function yearFacts(
         label: 'Earth above the horizon in 2027',
         value: `${share.pct.toFixed(1)}% of 2027`,
         status: 'Calculated',
-        source: `JPL Horizons (SRC-055), 2027, ${horizon}`,
+        source: `JPL Horizons, 2027, ${horizon}`,
       }
     : {
         id: 'earth',
@@ -60,7 +60,7 @@ export function yearFacts(
             ? 'Unavailable: the JPL Horizons file didn’t load'
             : 'Unavailable until the JPL Horizons positions load',
         status: 'Unavailable',
-        source: 'JPL Horizons (SRC-055), 2027',
+        source: 'JPL Horizons, 2027',
       };
   return [
     lighting('light', '% of the year in sunlight'),

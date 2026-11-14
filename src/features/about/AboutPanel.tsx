@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
-import { DEMO_LABEL } from '../../data/demoData';
 import { HORIZONS_INDEX } from '../../services/horizonsData';
 import { formatDayMonth } from '../../utils/time';
+import { AboutNotes } from './AboutNotes';
+import { SourcesList } from './SourcesList';
 import { HorizonsCheckTable } from './HorizonsCheckTable';
 import styles from './AboutPanel.module.css';
 
@@ -42,10 +43,6 @@ interface AboutPanelProps {
   tab: AboutTab;
   onTabChange: (tab: AboutTab) => void;
   onClose: () => void;
-  onTakeTour: () => void;
-  onWatchDemo: () => void;
-  /** Opens Lessons from past landings. */
-  onLessons: () => void;
   /** The map's data credits (from the lunar map feature). */
   credits: ReactNode;
   nonEndorsement: string;
@@ -63,9 +60,6 @@ export function AboutPanel({
   tab,
   onTabChange,
   onClose,
-  onTakeTour,
-  onWatchDemo,
-  onLessons,
   credits,
   nonEndorsement,
   appName,
@@ -175,37 +169,35 @@ export function AboutPanel({
                 Pick a place and a date on the Moon, and see at once whether a mission gets sunlight
                 for power and the Earth in view to talk home, how long until sunset and Earthset,
                 and what changes if the plan slips. The Sun and Earth are real, and the sites are
-                real landings; the mission profiles here are made up for practice (demo data).
+                real landings; the mission&apos;s needs are the ones you enter.
               </p>
               <h3 className={styles.subhead}>Finding your way</h3>
               <ul className={styles.guide}>
                 <li>
-                  <strong>The Moon</strong> fills the screen, lit by the real Sun. Drag to turn it,
-                  scroll to zoom. Click a site to open it, or anywhere else to check that spot.
+                  <strong>Plan</strong> on the left walks through four steps: 1 Location (type
+                  coordinates, click the Moon or take a past landing), 2 Mission (its name and
+                  needs), 3 Dates, and 4 Results. Back keeps what you entered.
                 </li>
                 <li>
-                  <strong>The menu</strong> on the left: Mission, Sites, Compare and Lessons each
-                  open in the one panel beside it. Click the item again, press Esc or use the ‹ tab
-                  to put the panel away. Demo and About sit at the bottom.
+                  <strong>Results</strong> shows the hours with the Sun up, the Earth up and both,
+                  sampled every hour, with the pass or fail of each check. More details holds the
+                  horizon view, the best window, other dates and night survival.
                 </li>
                 <li>
-                  <strong>Sites</strong> lists the sites best first (the longest usable window in
-                  the range checked), or by hours of Sun, of Earth or of both, or by name. Type
-                  coordinates at the top to check any place.
+                  <strong>Compare</strong> puts up to four past landings side by side for the same
+                  mission and dates, the longest usable window first.
                 </li>
                 <li>
-                  <strong>A site&apos;s card</strong> shows the Sun and Earth now with the time left
-                  before each sets, the horizon view (their paths over the month, seen from the
-                  site), the best window, and other dates for when the plan slips.
+                  <strong>Along the bottom</strong> on the Results step, the timeline over the dates
+                  you picked. Teal stretches are the windows.
                 </li>
                 <li>
-                  <strong>Along the bottom</strong>, the timeline: play or drag through the month.
-                  Teal stretches are the windows. The line above it shows the clock (Live or
-                  Simulated) and the Sun and Earth at the selected place.
+                  <strong>Moon Power Lab: battery and panel calculator</strong> (Power Lab in the
+                  menu): how big a battery a lander needs to survive the Moon night.
                 </li>
                 <li>
-                  <strong>On the right</strong>: zoom, the whole Moon, the grid, and presentation
-                  mode (H).
+                  <strong>On the map</strong>: Top and 3D views of the south pole, zoom, the whole
+                  Moon, the grid, Layers (bottom left) and presentation mode (H).
                 </li>
                 {slipAssistant ? (
                   <li>
@@ -241,15 +233,16 @@ export function AboutPanel({
           {tab === 'how' ? (
             <div className={styles.prose}>
               <p>
-                Pick a mission. Its needs are three numbers and a yes or no: how high the Sun must
-                be for its solar panels to give power, how many days of power it needs in a row, how
-                high the Earth must be to talk to it directly, and whether it has a relay instead.
+                Enter your mission. Its needs are three numbers and a yes or no: how high the Sun
+                must be for its solar panels to give power, how many days of power it needs in a
+                row, how high the Earth must be to talk to it directly, and whether it has a relay
+                instead.
               </p>
               <p>
                 For every site (or any point you pick), the app works out where the real Sun and
                 Earth are every hour over the range checked, as seen from that place. The range is
-                the dates you pick in the Mission view, or else the time bar&apos;s 29.5 days (one
-                lunar day and night). Three checks follow, each measuring one thing:
+                the dates you pick in the Dates step (today and the next 14 days at first, up to 12
+                months), sampled every hour. Three checks follow, each measuring one thing:
               </p>
               <ol className={styles.gates}>
                 <li>
@@ -268,19 +261,18 @@ export function AboutPanel({
               </ol>
               <p>
                 A window is a stretch with the Sun up and, for a mission without a relay, the Earth
-                up too. Sites can be ordered by their longest usable window (the default), by hours
-                of Sun, of Earth or of both, or by name. Sunset and Earthset are when each body next
-                drops below the horizon.
+                up too. Compare orders the past landings by their longest usable window. Sunset and
+                Earthset are when each body next drops below the horizon. +7 days moves both dates
+                by seven days; +1 month moves both by one calendar month.
               </p>
               <p className={styles.demoLine}>
-                <span className={styles.demoTag}>{DEMO_LABEL}</span> The Sun and Earth positions are
-                real:{' '}
+                The Sun and Earth positions are real:{' '}
                 {HORIZONS_DATES
                   ? `JPL Horizons at the four landing sites ${HORIZONS_DATES}; our engine (astronomy-engine) for clicked points and other dates, checked against JPL Horizons`
                   : 'our engine (astronomy-engine), checked against JPL Horizons'}
-                , and the sites are real landings. The demo missions&apos; needs are made up for
-                practice. The horizon is a smooth Moon: crater rims and hills, which matter most at
-                the south pole, are not counted yet.
+                , and the sites are real landings. The mission&apos;s needs are yours. The horizon
+                is a smooth Moon: crater rims and hills, which matter most at the south pole, are
+                not counted yet.
               </p>
             </div>
           ) : null}
@@ -302,20 +294,10 @@ export function AboutPanel({
             <>
               {credits}
               <HorizonsCheckTable />
+              <AboutNotes />
+              <SourcesList />
             </>
           ) : null}
-        </div>
-
-        <div className={styles.footer}>
-          <button type="button" className={styles.tour} onClick={onTakeTour}>
-            Take the tour
-          </button>
-          <button type="button" className={styles.tour} onClick={onWatchDemo} data-demo-start="">
-            Watch the short demo
-          </button>
-          <button type="button" className={styles.tour} onClick={onLessons}>
-            Lessons from past landings
-          </button>
         </div>
       </div>
     </div>

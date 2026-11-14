@@ -1,7 +1,5 @@
 .crumbs {
   min-width: 0;
-  padding-left: var(--space-1);
-  border-left: 1px solid var(--glass-edge);
 }
 
 .list {

@@ -1,48 +1,53 @@
 /* Map layers: a small floating panel beside the map's icon column. */
 .panel {
-  composes: panel from '../../styles/glass.module.css';
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  width: min(20rem, calc(100vw - 6rem));
+  width: min(26rem, calc(100vw - var(--rail-width) - 4rem));
   max-height: calc(100% - 2 * var(--panel-gap));
-  padding: var(--space-3) var(--space-3) var(--space-4);
+  padding: 0;
   overflow-y: auto;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
+  background: transparent;
+  color: var(--color-text);
   font-size: var(--font-size-caption);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.9);
 }
 
 .head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--space-2);
 }
 
 .title {
-  margin: 0;
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .close {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid rgb(255 255 255 / 0.45);
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-shadow: none;
   cursor: pointer;
 }
 
 .close:hover {
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: rgb(0 0 0 / 0.8);
 }
 
 .layers {
@@ -67,7 +72,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 32px;
+  min-height: 44px;
   color: var(--color-text);
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -76,8 +81,8 @@
 
 .toggle input,
 .choice input {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   margin: 0;
   accent-color: var(--color-accent);
 }
@@ -180,4 +185,206 @@
   margin: 0;
   color: var(--color-score-poor);
   line-height: 1.45;
+}
+
+/* Google-Maps-style tiles: a thumbnail of each layer's colours, its name under it. */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 5.5rem;
+  padding: var(--space-1);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+  transition: border-color 120ms ease-out;
+}
+
+.tile:hover {
+  border-color: var(--color-border-strong);
+}
+
+.tile[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  font-weight: 700;
+}
+
+.tile:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.thumb {
+  width: 100%;
+  height: 3rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.tileLabel {
+  line-height: 1.25;
+  text-align: center;
+}
+
+.sources {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Phones: the popup fills the room beside the rail and the side panel's handle. */
+@media (max-width: 899px) {
+  .panel {
+    width: calc(100vw - var(--rail-width) - var(--panel-gap) - 3.5rem);
+  }
+}
+
+/* The legend's two ends, in words: one on each side, never overlapping. */
+.ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+  line-height: 1.3;
+}
+
+.ends > span:last-child {
+  text-align: right;
+}
+
+/* A small badge on a tile for a preview layer. */
+.badge {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* One row of larger rounded thumbnails with the name under each, like Google Maps; the one that
+   is on has a ring. The legends of the layers that are on sit under the row. */
+.rows {
+  display: flex;
+  flex-flow: row wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rowItem {
+  display: flex;
+  min-width: 0;
+}
+
+.rowButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  line-height: 1.2;
+  text-align: center;
+  text-shadow: inherit;
+  cursor: pointer;
+}
+
+.rowButton[aria-pressed='true'] {
+  font-weight: 700;
+}
+
+.rowButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.swatch {
+  width: 4.25rem;
+  height: 4.25rem;
+  border: 2px solid rgb(255 255 255 / 0.55);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.5);
+  transition: border-color 120ms ease-out;
+}
+
+.rowButton:hover .swatch {
+  border-color: #fff;
+}
+
+.rowButton[aria-pressed='true'] .swatch {
+  border: 3px solid var(--color-accent);
+}
+
+.rowName {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+/* "Preview" on its own line under the name, as a solid pill that reads on the map. */
+.previewPill {
+  display: block;
+}
+
+.previewPill span {
+  margin: 0;
+  padding: 1px var(--space-2);
+  border: 0;
+  background: #fff;
+  color: var(--color-accent-text);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.legendBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.panel .ends,
+.panel .note,
+.panel .error {
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.95);
+}
+
+.panel .bar {
+  border-color: rgb(255 255 255 / 0.7);
+}
+
+.panel .readout {
+  border-color: rgb(255 255 255 / 0.45);
+  background: rgb(0 0 0 / 0.55);
 }

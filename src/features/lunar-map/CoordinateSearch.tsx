@@ -7,15 +7,33 @@ import styles from './CoordinateSearch.module.css';
 interface CoordinateSearchProps {
   /** A valid coordinate was entered: check that point, as if it were clicked on the Moon. */
   onGo: (point: LatLon) => void;
+  /** The one line under the box (a typing mistake replaces it). */
+  hint?: string;
+  /** The box's text, when the app owns it (a map click or a chip fills it). */
+  value?: string;
+  onValueChange?: (text: string) => void;
 }
+
+/** The one red line for an entry that cannot be read. */
+export const COORDINATE_ERROR = 'Use latitude, longitude, e.g. -84.79, 29.20';
 
 /**
  * "Go to coordinates": type a latitude and longitude ("85.5 S, 31 E" or "-85.5, 31") and the point
  * opens like a click on the Moon. The parser's own message explains anything it cannot read.
  */
-export function CoordinateSearch({ onGo }: CoordinateSearchProps) {
+export function CoordinateSearch({
+  onGo,
+  hint = 'Latitude, then longitude. Or click anywhere on the Moon.',
+  value,
+  onValueChange,
+}: CoordinateSearchProps) {
   const id = useId();
-  const [text, setText] = useState('');
+  const [own, setOwn] = useState('');
+  const text = value ?? own;
+  const setText = (next: string) => {
+    setOwn(next);
+    onValueChange?.(next);
+  };
   const [error, setError] = useState<string | null>(null);
   return (
     <form
@@ -26,7 +44,7 @@ export function CoordinateSearch({ onGo }: CoordinateSearchProps) {
         event.preventDefault();
         const result = parseCoordinateQuery(text);
         if (!result.ok) {
-          setError(result.error);
+          setError(COORDINATE_ERROR);
           return;
         }
         setError(null);
@@ -44,7 +62,7 @@ export function CoordinateSearch({ onGo }: CoordinateSearchProps) {
           inputMode="text"
           autoComplete="off"
           spellCheck={false}
-          placeholder="85.5 S, 31 E"
+          placeholder="-84.79, 29.20"
           maxLength={MAX_COORDINATE_QUERY_LENGTH}
           value={text}
           aria-invalid={error ? true : undefined}
@@ -64,7 +82,7 @@ export function CoordinateSearch({ onGo }: CoordinateSearchProps) {
         className={joinClassNames(styles.hint, error && styles.error)}
         aria-live="polite"
       >
-        {error ?? 'Latitude, then longitude. Or click anywhere on the Moon.'}
+        {error ?? hint}
       </p>
     </form>
   );
