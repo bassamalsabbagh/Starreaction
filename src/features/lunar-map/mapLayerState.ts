@@ -134,10 +134,13 @@ export function readoutText(layer: MapLayer, reading: LayerReading): string {
   }
 }
 
-/** A value's data status: Real data at the raster's own 40 m, Calculated at 160 m (a mean). */
+/**
+ * A value's data status: Real data at a raster's own pixels (the 40 m rasters, or a site patch,
+ * e.g. Roughness at 50 m), Calculated on a base grid (a mean of 4 x 4 pixels).
+ */
 export function readingStatus(reading: LayerReading): DataStatus | null {
   if (reading.kind !== 'value') return null;
-  return reading.pixelM <= 40 ? 'Real data' : 'Calculated';
+  return reading.pixelM <= 40 || reading.levelId !== 'base' ? 'Real data' : 'Calculated';
 }
 
 /** A hex colour "#rrggbb" as numbers. */
@@ -278,6 +281,12 @@ export function legendEnds(
     return {
       low: `Flat, safer to land ${Math.round(min)}°`,
       high: `Steep, risky ${Math.round(max)}°`,
+    };
+  }
+  if (layer.id === 'roughness') {
+    return {
+      low: `Smooth ${min.toFixed(2)} ${layer.unit}`,
+      high: `Rough ${max.toFixed(2)} ${layer.unit}`,
     };
   }
   return { low: `${Math.round(min)} ${layer.unit}`, high: `${Math.round(max)} ${layer.unit}` };

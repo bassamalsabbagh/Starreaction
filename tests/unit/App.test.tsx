@@ -57,7 +57,7 @@ function currentStep() {
 
 /** A "Past landings" button in the Location step (the map has a pin of the same name). */
 function pastLanding(name: string) {
-  return within(screen.getByRole('region', { name: 'Past landings' })).getByRole('button', {
+  return within(screen.getByRole('region', { name: 'Pick a past landing' })).getByRole('button', {
     name,
   });
 }
@@ -78,7 +78,7 @@ function walkToResults(name = 'Test rover') {
   if (!IM2) throw new Error('IM-2 missing');
   fireEvent.click(pastLanding(IM2.name));
   fireEvent.click(next());
-  fireEvent.change(screen.getByRole('textbox', { name: 'Mission name' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Name (optional)' }), {
     target: { value: name },
   });
   fireEvent.click(next());
@@ -122,9 +122,7 @@ describe('The four-step plan', () => {
     // One hint line only; no "choose a location" line, no other hints.
     // (Compare, hidden, uses the same line.)
     expect(
-      screen.getAllByText(
-        'Type coordinates or click the Moon. South and west are negative, e.g. -84.79, 29.20',
-      ).length,
+      screen.getAllByText('South and west are negative, e.g. -84.79, 29.20').length,
     ).toBeGreaterThan(0);
     expect(screen.queryByText(/Choose a location to go on|No location chosen yet/)).toBeNull();
     expect(screen.queryByText(/South is negative, east is positive/)).toBeNull();
@@ -137,18 +135,21 @@ describe('The four-step plan', () => {
     expect(screen.queryByText(/Chosen:/)).toBeNull();
     fireEvent.click(next());
 
-    // Step 2: the heading takes the focus; no banner; the name never blocks Next (empty is "My mission").
-    const missionHeading = screen.getByRole('heading', { level: 2, name: 'Add your mission' });
+    // Step 2: the heading takes the focus; no banner; the name never blocks Next (empty is "My lander").
+    const missionHeading = screen.getByRole('heading', {
+      level: 2,
+      name: 'What does your lander need?',
+    });
     expect(missionHeading).toHaveFocus();
-    expect(currentStep()).toHaveTextContent('Mission');
+    expect(currentStep()).toHaveTextContent('Lander');
     expect(screen.queryByText(/Starting values/)).toBeNull();
     expect(screen.queryByText(/Up to 30 characters/)).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Mission name' })).toHaveAttribute(
+    expect(screen.getByRole('textbox', { name: 'Name (optional)' })).toHaveAttribute(
       'placeholder',
-      'My mission',
+      'My lander',
     );
     expect(next()).toBeEnabled();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Mission name' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name (optional)' }), {
       target: { value: 'Test rover' },
     });
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Days of sunlight needed in a row' }), {
@@ -176,7 +177,9 @@ describe('The four-step plan', () => {
     expect(results).not.toHaveTextContent(/ h\b|Best window|needs met|Share|Usable window/);
     expect(within(results).getByText('Other recommended dates')).toBeInTheDocument();
     // The Horizons files are not loaded in these tests: our engine.
-    expect(within(results).getByText('Data: our engine')).toBeInTheDocument();
+    expect(
+      within(results).getByText('Data: our engine · flat horizon (hills not included)'),
+    ).toBeInTheDocument();
     expect(within(results).getByRole('button', { name: 'More details ›' })).toHaveAttribute(
       'aria-expanded',
       'false',
@@ -188,7 +191,7 @@ describe('The four-step plan', () => {
     fireEvent.click(back());
     expect(screen.getByLabelText('Stop (UTC)')).toHaveValue('2026-11-29');
     fireEvent.click(back());
-    expect(screen.getByRole('textbox', { name: 'Mission name' })).toHaveValue('Test rover');
+    expect(screen.getByRole('textbox', { name: 'Name (optional)' })).toHaveValue('Test rover');
     expect(
       screen.getByRole('spinbutton', { name: 'Days of sunlight needed in a row' }),
     ).toHaveValue(2);
@@ -202,7 +205,7 @@ describe('The four-step plan', () => {
     if (!IM2) throw new Error('IM-2 missing');
     fireEvent.click(pastLanding(IM2.name));
     fireEvent.click(next());
-    fireEvent.change(screen.getByRole('textbox', { name: 'Mission name' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name (optional)' }), {
       target: { value: 'Test rover' },
     });
     fireEvent.change(screen.getByRole('spinbutton', { name: 'How high must the Sun be?' }), {
@@ -219,6 +222,8 @@ describe('The four-step plan', () => {
     expect(within(bar).getByTestId('sky-status')).toHaveTextContent(/Sun (up [0-9]+°|down)/);
     expect(bar).not.toHaveTextContent(/Live|Simulated|Demo Mission|Now/);
     expect(screen.queryByRole('group', { name: 'Status' })).toBeNull();
+    // The data source line says what the horizon is: flat, hills not included.
+    expect(screen.getByText(/flat horizon \(hills not included\)/i)).toBeInTheDocument();
   });
 
   it('uses exactly the step 3 dates: 24–28 Nov can never show more than 5 days', async () => {
@@ -226,7 +231,7 @@ describe('The four-step plan', () => {
     if (!IM2) throw new Error('IM-2 missing');
     fireEvent.click(pastLanding(IM2.name));
     fireEvent.click(next());
-    fireEvent.change(screen.getByRole('textbox', { name: 'Mission name' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name (optional)' }), {
       target: { value: 'Test rover' },
     });
     fireEvent.click(next());
@@ -244,6 +249,104 @@ describe('The four-step plan', () => {
     for (const value of days) expect(value).toBeLessThanOrEqual(5);
     // The time bar covers the same dates.
     expect(screen.getByRole('group', { name: 'Time bar' })).toHaveTextContent(/24 Nov.*29 Nov/);
+  });
+
+  it('Results follow new step 3 dates after Results was shown (IM-2, 21 Nov – 6 Dec)', async () => {
+    await renderApp();
+    if (!IM2) throw new Error('IM-2 missing');
+    fireEvent.click(pastLanding(IM2.name));
+    fireEvent.click(next());
+    fireEvent.click(next());
+    fireEvent.click(next());
+    const tilesText = () => screen.getByRole('list', { name: 'Checks' }).textContent;
+    fireEvent.click(back());
+    fireEvent.change(screen.getByLabelText('Start (UTC)'), { target: { value: '2026-11-21' } });
+    fireEvent.change(screen.getByLabelText('Stop (UTC)'), { target: { value: '2026-12-06' } });
+    fireEvent.click(next());
+    // The Sun sets at IM-2 on 1 Dec: not every hour of the dates is up.
+    expect(tilesText()).toMatch(/Sun up10\.0 days.*Earth in view13\.4 days.*together10\.0 days/);
+  });
+
+  it('puts More details above Compare, with the details in the new order', async () => {
+    await renderApp();
+    walkToResults();
+    const results = screen.getByRole('article', { name: new RegExp(IM2?.name ?? '') });
+    const buttons = within(results)
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(buttons.indexOf('More details ›')).toBeGreaterThan(-1);
+    expect(buttons.indexOf('More details ›')).toBeLessThan(
+      buttons.indexOf('Compare with another location'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More details ›' }));
+    const names = screen
+      .getAllByRole('button', { expanded: false })
+      .map((button) => button.textContent ?? '')
+      .filter((text) =>
+        /^(This spot|Sun and Earth over the year|Sky chart|Best window|Power & battery|Share)/.test(
+          text,
+        ),
+      )
+      .map((text) =>
+        text
+          .replace(/[+:].*$/, '')
+          .replace(/ ?[0-9].*$/, '')
+          .trim(),
+      );
+    // Sections present, in order (the year rows only appear when they have data).
+    const order = ['This spot', 'Sky chart', 'Best window', 'Power & battery', 'Share'];
+    const found = order.filter((name) => names.includes(name));
+    expect(found).toEqual(order);
+    expect(order.map((name) => names.indexOf(name))).toEqual(
+      [...order.map((name) => names.indexOf(name))].sort((x, y) => x - y),
+    );
+  });
+
+  it('keeps one floating thing open: the rail closes the time bar, opening it again works', async () => {
+    await renderApp();
+    walkToResults();
+    expect(screen.getByRole('group', { name: 'Time bar' })).toBeInTheDocument();
+    fireEvent.click(railItem('Compare'));
+    expect(screen.queryByRole('group', { name: 'Time bar' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open the time bar' }));
+    expect(screen.getByRole('group', { name: 'Time bar' })).toBeInTheDocument();
+    const layers = screen.queryByRole('button', { name: 'Layers' });
+    if (layers) {
+      // Layers closes the time bar; the time bar closes Layers.
+      fireEvent.click(layers);
+      expect(screen.queryByRole('group', { name: 'Time bar' })).toBeNull();
+      expect(layers).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.click(screen.getByRole('button', { name: 'Open the time bar' }));
+      expect(layers).toHaveAttribute('aria-expanded', 'false');
+    }
+  });
+
+  it('names the three ways to choose a place, and saves a place with a name', async () => {
+    window.localStorage.clear();
+    await renderApp();
+    for (const heading of [
+      'Click anywhere on the Moon',
+      'Pick a past landing',
+      'Type coordinates',
+    ]) {
+      expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
+    }
+    expect(screen.getAllByText('or')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Save this place/ })).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Go to coordinates' }), {
+      target: { value: '-84.79, 29.20' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '☆ Save this place' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name this place' }), {
+      target: { value: 'Rim camp' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const saved = screen.getByRole('region', { name: 'Saved places' });
+    expect(within(saved).getByRole('button', { name: 'Rim camp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '★ Saved' })).toBeDisabled();
+    fireEvent.click(within(saved).getByRole('button', { name: 'Remove Rim camp' }));
+    expect(screen.queryByRole('region', { name: 'Saved places' })).toBeNull();
+    window.localStorage.clear();
   });
 
   it("loads a recommended window's dates with Go, everywhere", async () => {
@@ -475,11 +578,13 @@ describe('Map', () => {
     const panel = screen.getByRole('region', { name: 'Layers' });
     expect(within(panel).getByRole('list', { name: 'Layers to show' })).toBeInTheDocument();
     expect(within(panel).queryByRole('slider')).toBeNull();
-    for (const name of [/^Elevation$/, /^Slope$/, /^Sun visibility/, /^Earth visibility/]) {
+    for (const name of [/^Elevation$/, /^Slope$/]) {
       expect(within(panel).getByRole('button', { name })).toBeInTheDocument();
     }
-    // No Preview badges: the explanation is on the About page.
-    expect(within(panel).getAllByText('Preview')).toHaveLength(2);
+    // Sun and Earth visibility are hidden behind a flag for now (see Future plans on About).
+    expect(within(panel).queryByRole('button', { name: /^Sun visibility/ })).toBeNull();
+    expect(within(panel).queryByRole('button', { name: /^Earth visibility/ })).toBeNull();
+    expect(within(panel).queryByText('Preview')).toBeNull();
     fireEvent.click(within(panel).getByRole('button', { name: 'Close map layers' }));
     expect(screen.queryByRole('region', { name: 'Layers' })).toBeNull();
   });

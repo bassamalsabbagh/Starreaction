@@ -3,7 +3,6 @@ import {
   lazy,
   memo,
   useCallback,
-  useDeferredValue,
   useEffect,
   useId,
   useMemo,
@@ -266,7 +265,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
   const [showGrid, setShowGrid] = useState(false);
   // The mission as typed in the wizard (kept while stepping back and forth, and in a shared link).
   const [missionDraftTyped, setMissionDraft] = useState<MissionDraft>(() => initialDraft(shared));
-  // An empty name is "My mission": the name never blocks Next.
+  // An empty name is "My lander": the name never blocks Next.
   const missionDraft = useMemo(
     () => ({ ...missionDraftTyped, name: missionDraftTyped.name.trim() || DEFAULT_MISSION_NAME }),
     [missionDraftTyped],
@@ -277,7 +276,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
       missionFromDraft(
         missionValid ? missionDraft : STARTING_DRAFT,
         WIZARD_MISSION_ID,
-        missionValid ? missionDraft.name.trim() : 'Your mission',
+        missionValid ? missionDraft.name.trim() : DEFAULT_MISSION_NAME,
       ),
     [missionDraft, missionValid],
   );
@@ -351,13 +350,20 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
   const reportLayerFailure = useStableCallback((layerId: string) =>
     setLayerFailures((ids) => (ids.includes(layerId) ? ids : [...ids, layerId])),
   );
+  // The time bar is closed (a small "Time" button) until opened, and opens by itself when step 4
+  // shows. A shared link that opens on its results has it open.
+  const [timeBarFolded, setTimeBarFolded] = useState(step !== RESULTS_STEP);
   const [layersOpen, setLayersOpen] = useState(false);
   const layersOpenRef = useRef(layersOpen);
   useEffect(() => {
     layersOpenRef.current = layersOpen;
   });
   // The map layers' panel opens from the map's icon column.
-  const toggleLayersPanel = useStableCallback(() => setLayersOpen((open) => !open));
+  // Only one floating thing is open at a time: opening Layers closes the time bar.
+  const toggleLayersPanel = useStableCallback(() => {
+    setLayersOpen((open) => !open);
+    setTimeBarFolded(true);
+  });
   // The readout: the active layer's value under the pointer (desktop) or at the tapped spot.
   const [hoverGround, setHoverGround] = useState<LatLon | null>(null);
   const anyLayerVisible = layerSettings.anyVisible || visibility.shown.length > 0;
@@ -423,13 +429,13 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
   // What the last Share did ("Link copied"), shown under the results for a while.
   const [shareNote, setShareNote] = useState<string | null>(null);
   const leftPanelRef = useRef<HTMLDivElement>(null);
-  // The time bar is closed (a small "Time" button) until opened, and opens by itself when step 4
-  // shows. A shared link that opens on its results has it open.
-  const [timeBarFolded, setTimeBarFolded] = useState(step !== RESULTS_STEP);
   const [stepSeen, setStepSeen] = useState(step);
   if (step !== stepSeen) {
     setStepSeen(step);
-    if (step === RESULTS_STEP) setTimeBarFolded(false);
+    if (step === RESULTS_STEP) {
+      setTimeBarFolded(false);
+      setLayersOpen(false);
+    }
   }
   const [about, setAbout] = useState<{ open: boolean; tab: AboutTab }>({
     open: false,
@@ -497,9 +503,11 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     [dateRange, datesValid],
   );
   const checkRange = pickedRange ?? range;
-  // Computed when the range, the mission or the sites change; not per tick. It is deferred, so
-  // during playback the clock and the light never wait for the checks.
-  const skyRange = useDeferredValue(checkRange);
+  // Computed when the range, the mission or the sites change; not per tick. Not deferred: a
+  // deferred range restarted on every playback tick (100 ms) or map hover and never caught up, so
+  // Results kept the previous dates' numbers. The picked dates do not move with the playhead, so
+  // this runs only when the dates or the mission change.
+  const skyRange = checkRange;
   const sky = useMemo(() => skyBySite(skyRange, mission, horizons), [skyRange, mission, horizons]);
   const rankedSites = useMemo(
     () => rankSites(SITES, mission, sky, skyRange, 'window'),
@@ -576,6 +584,9 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
       openAbout('about', opener);
       return;
     }
+    // Plan, Compare and Power Lab close both floating things.
+    setLayersOpen(false);
+    setTimeBarFolded(true);
     if (railActive === item) {
       setPanelOpen(false);
       return;
@@ -678,6 +689,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
       setTime(next.startMs);
       // The time bar shows the dates just set, from the start date.
       setTimeBarFolded(false);
+      setLayersOpen(false);
     }
   };
   // A recommended window's "Go": its dates become the step 3 dates, so Results, the time bar and
@@ -822,7 +834,11 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
     );
   };
 
-  const foldTimeBar = (folded: boolean) => setTimeBarFolded(folded);
+  // Opening the time bar closes Layers.
+  const foldTimeBar = (folded: boolean) => {
+    setTimeBarFolded(folded);
+    if (!folded) setLayersOpen(false);
+  };
 
   const place: LatLon | null = selectedSite?.site ?? pickedPoint;
   const placeSeries = selectedSite ? (horizons.get(selectedSite.site.id) ?? null) : null;
@@ -898,6 +914,7 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
       sites={SITES}
       coordText={coordText}
       onCoordText={setCoordText}
+      point={typedPoint}
       selectedSiteId={selectedSiteId}
       onSelectSite={selectSite}
       onGoToPoint={goToPoint}
@@ -1050,7 +1067,6 @@ function Workspace({ shared }: { shared: Partial<ShareState> }) {
           <div className={styles.detailsLayer}>
             <DetailsPanel
               id={detailsId}
-              kind={selectedSite ? 'site' : 'point'}
               place={place}
               why={selectedSite?.site.why ?? null}
               nearest={

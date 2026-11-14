@@ -3,10 +3,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  width: min(26rem, calc(100vw - var(--rail-width) - 4rem));
-  max-height: calc(100% - 2 * var(--panel-gap));
+  /* Hugs its tiles, so the Close X sits at the top right of the group. */
+  width: fit-content;
+  min-width: 14rem;
+  max-width: min(26rem, calc(100vw - var(--rail-width) - 4rem));
   padding: 0;
-  overflow-y: auto;
+  /* No scrolling here: no scrollbar beside the tiles. */
+  overflow: visible;
   background: transparent;
   color: var(--color-text);
   font-size: var(--font-size-caption);
@@ -32,9 +35,11 @@
 .close {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-1);
+  min-width: 44px;
   min-height: 44px;
-  padding: 0 var(--space-3);
+  padding: 0;
   border: 1px solid rgb(255 255 255 / 0.45);
   border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.6);
@@ -153,14 +158,15 @@
   color: var(--color-text-faint);
 }
 
+/* A small white card with dark text (the shared panel look), readable on any map background. */
 .readout {
+  composes: panel from '../../styles/glass.module.css';
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  text-shadow: none;
 }
 
 .readoutLine {
@@ -356,35 +362,46 @@
   display: block;
 }
 
+/* Dark grey text on a light grey pill: readable over any map colour. */
 .previewPill span {
   margin: 0;
   padding: 1px var(--space-2);
   border: 0;
-  background: #fff;
-  color: var(--color-accent-text);
+  background: #e4e4e4;
+  color: #2f2f2f;
   font-size: var(--font-size-xs);
   font-weight: 700;
   text-shadow: none;
 }
 
+/* Each legend sits on a small white card with dark text, at least 13 px and medium weight. */
 .legendBlock {
+  composes: panel from '../../styles/glass.module.css';
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-shadow: none;
 }
 
-.panel .ends,
-.panel .note,
-.panel .error {
-  text-shadow: 0 1px 3px rgb(0 0 0 / 0.95);
+.panel .legendBlock .ends,
+.panel .legendBlock .note,
+.panel .legendBlock .error,
+.panel .legendBlock .ticks,
+.panel .legendBlock .unit {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-shadow: none;
 }
 
-.panel .bar {
-  border-color: rgb(255 255 255 / 0.7);
+.panel .legendBlock .error {
+  color: var(--color-score-poor);
 }
 
-.panel .readout {
-  border-color: rgb(255 255 255 / 0.45);
-  background: rgb(0 0 0 / 0.55);
+.panel .legendBlock .bar {
+  border-color: var(--color-border-strong);
 }

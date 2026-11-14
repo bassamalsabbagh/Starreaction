@@ -90,7 +90,11 @@ describe.runIf(LAYERS.length > 0)('LayerPanel', () => {
     renderPanel({});
     const row = screen.getByRole('list', { name: 'Layers to show' });
     const buttons = within(row).getAllByRole('button');
-    expect(buttons.map((button) => button.textContent)).toEqual(['Elevation', 'Slope']);
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      'Elevation',
+      'Slope',
+      'Roughness',
+    ]);
     const css = readFileSync('src/features/lunar-map/LayerPanel.module.css', 'utf8');
     expect(css.match(/\.rows \{([^}]*)\}/)?.[1] ?? '').toMatch(/flex-flow: row wrap/);
   });

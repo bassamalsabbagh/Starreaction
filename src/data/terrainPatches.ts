@@ -4,6 +4,7 @@
  * EMPTY ON PURPOSE: fill them only from a sourced DEM recorded in docs/DATA_SOURCES.md. Never add
  * made-up heights. Sites with neither keep the smooth-sphere horizon.
  */
+import { TERRAIN_HORIZON_ENABLED } from '../app/featureFlags';
 import { azimuthElevationOf, lunarSky, type LatLon } from '../utils/lunarSky';
 import {
   horizonProfile,
@@ -66,8 +67,16 @@ export const TERRAIN_PATCHES: Readonly<Record<string, TerrainPatch>> = {};
 
 const profiles = new Map<string, HorizonProfile | null>();
 
-/** The site's horizon profile (built once), or null when no terrain data is loaded for it. */
-export function terrainProfileFor(siteId: string): HorizonProfile | null {
+/**
+ * The site's horizon profile (built once), or null when no terrain data is loaded for it, or the
+ * terrain horizon is switched off (TERRAIN_HORIZON_ENABLED): then every place has the flat horizon.
+ * `enabled` is for tests of the terrain code itself.
+ */
+export function terrainProfileFor(
+  siteId: string,
+  enabled: boolean = TERRAIN_HORIZON_ENABLED,
+): HorizonProfile | null {
+  if (!enabled) return null;
   if (!profiles.has(siteId)) {
     const ready = TERRAIN_HORIZONS[siteId];
     const patch = TERRAIN_PATCHES[siteId];

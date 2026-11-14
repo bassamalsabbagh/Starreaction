@@ -64,3 +64,8 @@ desktop.ini
 .claude/skills/**/*.exe
 
 .vercel
+
+# Tool and agent folders: personal setup, not part of the site (kept locally, never committed)
+.claude/
+.agents/
+.impeccable/

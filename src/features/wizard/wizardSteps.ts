@@ -7,7 +7,7 @@ import { DAY_MS } from '../../utils/time';
 
 export const WIZARD_STEPS = [
   { id: 'location', label: 'Location', title: 'Choose a location' },
-  { id: 'mission', label: 'Mission', title: 'Add your mission' },
+  { id: 'mission', label: 'Lander', title: 'What does your lander need?' },
   { id: 'dates', label: 'Dates', title: 'Pick the dates' },
   { id: 'results', label: 'Results', title: 'Results' },
 ] as const;
@@ -63,5 +63,4 @@ export function defaultDates(now: number): { startMs: number; stopMs: number } {
 }
 
 /** The coordinate box's one hint line (the Location step and Compare). */
-export const LOCATION_HINT =
-  'Type coordinates or click the Moon. South and west are negative, e.g. -84.79, 29.20';
+export const LOCATION_HINT = 'South and west are negative, e.g. -84.79, 29.20';

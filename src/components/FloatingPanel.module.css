@@ -83,21 +83,21 @@
    the handle rides along to its spot while its arrow turns. Reduced motion: all at once. */
 @media (prefers-reduced-motion: no-preference) {
   .dock {
-    transition: transform 250ms var(--ease-out);
+    transition: transform var(--duration-panel) var(--ease-out);
   }
 
   .panel {
-    transition: opacity 250ms var(--ease-out);
+    transition: opacity var(--duration-panel) var(--ease-out);
   }
 
   .handle {
     transition-property: color, translate, border-color, border-radius;
-    transition-duration: 120ms, 250ms, 250ms, 250ms;
+    transition-duration: 120ms, var(--duration-panel), var(--duration-panel), var(--duration-panel);
     transition-timing-function: ease-out, var(--ease-out), var(--ease-out), var(--ease-out);
   }
 
   .arrow {
-    transition: rotate 250ms var(--ease-out);
+    transition: rotate var(--duration-panel) var(--ease-out);
   }
 }
 

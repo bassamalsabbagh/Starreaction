@@ -21,7 +21,6 @@ export type DetailsSection = 'spot' | 'year' | 'window' | 'power' | 'path' | 'sh
 
 interface DetailsPanelProps {
   id: string;
-  kind: 'site' | 'point';
   place: LatLon;
   /** A past landing's team note ("why here"), or null for a point. */
   why: string | null;
@@ -53,7 +52,6 @@ interface DetailsPanelProps {
  */
 export function DetailsPanel({
   id,
-  kind,
   place,
   why,
   nearest,
@@ -139,6 +137,33 @@ export function DetailsPanel({
         ? section('year', 'Sun and Earth over the year', <YearFacts facts={yearFacts} />)
         : null}
       {section(
+        'path',
+        'Sky chart: where the Sun and Earth move',
+        <>
+          <HorizonView
+            place={place}
+            range={range}
+            sun={sun}
+            earth={earth}
+            minSunElevationDeg={mission.minSunElevationDeg}
+            terrain={terrain}
+            series={series}
+          />
+          {horizonsLinks ? (
+            <p className={styles.line}>
+              Open in JPL Horizons:{' '}
+              <a href={horizonsLinks.sun} target="_blank" rel="noopener noreferrer">
+                Sun
+              </a>{' '}
+              ·{' '}
+              <a href={horizonsLinks.earth} target="_blank" rel="noopener noreferrer">
+                Earth
+              </a>
+            </p>
+          ) : null}
+        </>,
+      )}
+      {section(
         'window',
         'Best window',
         <>
@@ -172,34 +197,6 @@ export function DetailsPanel({
           />
           {landerId !== null && dark ? (
             <NightSurvival lander={findLander(landerId)} dark={dark} />
-          ) : null}
-        </>,
-      )}
-      {section(
-        'path',
-        'Sky chart: where the Sun and Earth move',
-        <>
-          <HorizonView
-            place={place}
-            range={range}
-            sun={sun}
-            earth={earth}
-            minSunElevationDeg={mission.minSunElevationDeg}
-            terrain={terrain}
-            kind={kind}
-            series={series}
-          />
-          {horizonsLinks ? (
-            <p className={styles.line}>
-              Open in JPL Horizons:{' '}
-              <a href={horizonsLinks.sun} target="_blank" rel="noopener noreferrer">
-                Sun
-              </a>{' '}
-              ·{' '}
-              <a href={horizonsLinks.earth} target="_blank" rel="noopener noreferrer">
-                Earth
-              </a>
-            </p>
           ) : null}
         </>,
       )}

@@ -115,13 +115,15 @@
   --panel-gap: var(--space-3);
   /* The time bar's height, open and folded to a line; overlays above it stack on top. */
   --time-bar-height: 6.5rem;
+  /* With the left panel open the bar may need a second line (TimeBar.module.css). */
+  --time-bar-height-wrapped: 9rem;
   --time-bar-folded-height: 2.25rem;
   /* The status line (lander, clock, Sun and Earth) just above the time bar. */
   --status-line-height: 2.5rem;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   /* One pace for everything that slides or fades (the panel, the map framing): 250 ms. */
-  --duration-panel: 250ms;
+  --duration-panel: 200ms;
 
   --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* One family: numbers use it too, with tabular figures (the name is kept for existing rules). */
@@ -230,6 +232,13 @@ dd {
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* Pressed: every enabled button squeezes a little, so a click always has feedback. */
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled):active {
+    scale: 0.97;
+  }
 }
 
 ::selection {

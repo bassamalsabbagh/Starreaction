@@ -55,6 +55,13 @@
   );
 }
 
+/* With the left panel open the bar is narrow and may wrap to two lines: reserve the room. */
+@media (max-width: 1599px) {
+  .shell.panelOpen {
+    --time-bar-shown: var(--time-bar-height-wrapped);
+  }
+}
+
 /* Closed: no bar and no status line; the Time button sits beside Layers. */
 .timeBarFolded {
   --time-bar-shown: 0px;

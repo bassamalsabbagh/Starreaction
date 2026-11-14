@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TERRAIN_HORIZON_ENABLED } from '../../../src/app/featureFlags';
 import {
   TERRAIN_HORIZONS,
   terrainProfileFor,
@@ -29,7 +30,7 @@ describe('usableHorizons', () => {
 describe('terrainProfileFor', () => {
   it('gives each site with a generated horizon that horizon, one value per degree', () => {
     for (const [siteId, profile] of Object.entries(TERRAIN_HORIZONS)) {
-      expect(terrainProfileFor(siteId)).toBe(profile);
+      expect(terrainProfileFor(siteId, true)).toBe(profile);
       expect(profile.elevations).toHaveLength(360);
       expect(profile.source.trim()).not.toBe('');
     }
@@ -37,8 +38,15 @@ describe('terrainProfileFor', () => {
 
   it('gives sites without terrain data no horizon (a smooth Moon)', () => {
     // Blue Ghost Mission 1 landed at 18.6 N, far outside any south-polar elevation map.
-    expect(terrainProfileFor('bg1')).toBeNull();
-    expect(terrainProfileFor('no-such-site')).toBeNull();
+    expect(terrainProfileFor('bg1', true)).toBeNull();
+    expect(terrainProfileFor('no-such-site', true)).toBeNull();
+  });
+
+  it('gives every site the flat horizon while TERRAIN_HORIZON_ENABLED is off (the default)', () => {
+    expect(TERRAIN_HORIZON_ENABLED).toBe(false);
+    for (const siteId of [...Object.keys(TERRAIN_HORIZONS), 'im1', 'im2']) {
+      expect(terrainProfileFor(siteId)).toBeNull();
+    }
   });
 });
 

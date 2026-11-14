@@ -129,11 +129,22 @@ describe('the readout', () => {
   });
 
   it('tags 40 m values Real data and 160 m values Calculated (the mean of 4 × 4 pixels)', () => {
-    const value = (pixelM: number) =>
-      ({ kind: 'value', value: 1, unit: '°', levelId: 'x', pixelM }) as const;
-    expect(readingStatus(value(40))).toBe('Real data');
+    const value = (pixelM: number, levelId = 'base') =>
+      ({ kind: 'value', value: 1, unit: '°', levelId, pixelM }) as const;
+    expect(readingStatus(value(40, 'im2'))).toBe('Real data');
     expect(readingStatus(value(160))).toBe('Calculated');
+    // Roughness: a site patch is its own 50 m pixels (Real data); its 200 m base is a mean.
+    expect(readingStatus(value(50, 'im2'))).toBe('Real data');
+    expect(readingStatus(value(200))).toBe('Calculated');
     expect(readingStatus({ kind: 'outside' })).toBeNull();
+  });
+
+  it('gives Roughness its own legend words, with the values in metres', () => {
+    const roughness = { id: 'roughness', label: 'Roughness', unit: 'm' };
+    expect(legendEnds(roughness, 0.34, 1.52)).toEqual({
+      low: 'Smooth 0.34 m',
+      high: 'Rough 1.52 m',
+    });
   });
 });
 
@@ -257,6 +268,6 @@ describe('the legend range (percentiles, not the most extreme pixels)', () => {
   });
 
   it('falls back to the manifest’s own ends for a layer without percentiles', () => {
-    expect(legendRange('roughness', { ...legend, min: 1, max: 9 })).toEqual({ min: 1, max: 9 });
+    expect(legendRange('no-such-layer', { ...legend, min: 1, max: 9 })).toEqual({ min: 1, max: 9 });
   });
 });

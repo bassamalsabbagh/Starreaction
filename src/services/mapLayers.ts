@@ -257,24 +257,21 @@ export function locateValue(
   if (col < 0 || row < 0 || col >= p.widthPx || row >= p.heightPx) return { kind: 'outside' };
   const tile = manifest.tileSize;
   const levels = layer.values.levels;
-  const patch = levels.find(
-    (level) =>
-      level.id !== 'base' &&
-      level.pixelM === p.pixelM &&
-      col >= level.col0 &&
-      col < level.col0 + level.width &&
-      row >= level.row0 &&
-      row < level.row0 + level.height,
-  );
+  // Each level is indexed in its own pixels from the shared top-left corner, so a layer on another
+  // grid (Roughness: 50 m patches, 200 m base) reads the right pixel. For the 40 m rasters this is
+  // the same pixel as before: floor(x / 160) = floor(floor(x / 40) / 4) for x ≥ 0.
+  const at = (level: LayerLevel) => ({
+    col: Math.floor((x - p.originX) / level.pixelM) - level.col0,
+    row: Math.floor((p.originY - y) / level.pixelM) - level.row0,
+  });
+  const inside = (level: LayerLevel, spot: { col: number; row: number }) =>
+    spot.col >= 0 && spot.row >= 0 && spot.col < level.width && spot.row < level.height;
+  const patch = levels.find((level) => level.id !== 'base' && inside(level, at(level)));
   const base = levels.find((level) => level.id === 'base');
   const level = patch ?? base;
   if (!level) return { kind: 'outside' };
-  const factor = level.pixelM / p.pixelM;
-  const levelCol = Math.floor(col / factor) - level.col0;
-  const levelRow = Math.floor(row / factor) - level.row0;
-  if (levelCol < 0 || levelRow < 0 || levelCol >= level.width || levelRow >= level.height) {
-    return { kind: 'outside' };
-  }
+  const { col: levelCol, row: levelRow } = at(level);
+  if (!inside(level, at(level))) return { kind: 'outside' };
   const tileRow = Math.floor(levelRow / tile);
   const tileCol = Math.floor(levelCol / tile);
   return {

@@ -12,6 +12,8 @@ interface CoordinateSearchProps {
   /** The box's text, when the app owns it (a map click or a chip fills it). */
   value?: string;
   onValueChange?: (text: string) => void;
+  /** The label is read by screen readers only (the step's own heading says it). */
+  hideLabel?: boolean;
 }
 
 /** The one red line for an entry that cannot be read. */
@@ -26,6 +28,7 @@ export function CoordinateSearch({
   hint = 'Latitude, then longitude. Or click anywhere on the Moon.',
   value,
   onValueChange,
+  hideLabel = false,
 }: CoordinateSearchProps) {
   const id = useId();
   const [own, setOwn] = useState('');
@@ -51,7 +54,7 @@ export function CoordinateSearch({
         onGo({ lat: result.value.lat, lon: result.value.lon });
       }}
     >
-      <label className={styles.label} htmlFor={id}>
+      <label className={joinClassNames(styles.label, hideLabel && 'visually-hidden')} htmlFor={id}>
         Go to coordinates
       </label>
       <div className={styles.row}>

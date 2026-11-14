@@ -6,7 +6,11 @@
   flex-direction: column;
   justify-content: center;
   gap: 0.125rem;
-  height: var(--time-bar-height);
+  /* One line is 6.5rem; narrower, the speed and status take a second (the shell reserves it). */
+  min-height: 6.5rem;
+  min-width: 0;
+  max-width: 100%;
+  container-type: inline-size;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-lg);
   box-shadow:
@@ -369,6 +373,49 @@
 
   .icon {
     transition-property: color, border-color, background-color, scale;
+  }
+}
+
+/* Narrow bar (it sits beside the left panel): the speed menu and the status move to a second
+   line, so nothing is cut off. */
+.lineBreak {
+  display: none;
+}
+
+@container (max-width: 58rem) {
+  .controls {
+    flex-wrap: wrap;
+  }
+
+  .backToDates {
+    order: 4;
+    margin-left: auto;
+  }
+
+  .handle {
+    order: 5;
+    margin-left: auto;
+  }
+
+  .backToDates + .handle {
+    margin-left: 0;
+  }
+
+  .lineBreak {
+    display: block;
+    order: 6;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .speedPick {
+    order: 7;
+  }
+
+  .info {
+    order: 8;
+    flex: 1 1 12rem;
+    margin: 0;
   }
 }
 

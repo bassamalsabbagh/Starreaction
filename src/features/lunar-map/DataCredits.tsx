@@ -52,7 +52,7 @@ export function DataCredits({ imageryStatus }: { imageryStatus: ImageryStatus })
             ? `At the landing sites ${HORIZONS_DATES}: JPL Horizons (NASA/JPL), every 10 minutes. Elsewhere, and for any clicked point, computed`
             : 'Computed'}{' '}
           with astronomy-engine 2.1.19 (MIT licence), checked against NASA/JPL Horizons to within
-          0.01°. Smooth Moon, no terrain shadows.
+          0.01°. Flat horizon (hills not included).
         </span>
       </li>
       {MAP_LAYERS ? (
